@@ -1,5 +1,6 @@
 // ============================================
-// 1. src/models/Category.js
+// src/models/Category.js
+// Category model untuk kategori produk
 // ============================================
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
@@ -20,28 +21,43 @@ const Category = sequelize.define(
       },
       validate: {
         notEmpty: {
-          msg: "Nama kategori tidak boleh kosong",
+          msg: "Nama kategori harus diisi",
         },
         len: {
           args: [3, 50],
-          msg: "Nama kategori harus 3-50 karakter",
+          msg: "Nama kategori minimal 3 karakter",
         },
       },
     },
     description: {
       type: DataTypes.STRING(255),
       allowNull: true,
+      validate: {
+        len: {
+          args: [0, 255],
+          msg: "Deskripsi maksimal 255 karakter",
+        },
+      },
     },
     isActive: {
       type: DataTypes.BOOLEAN,
-      defaultValue: true,
       allowNull: false,
+      defaultValue: true,
     },
   },
   {
     tableName: "categories",
     timestamps: true,
     underscored: true,
+    indexes: [
+      {
+        unique: true,
+        fields: ["name"],
+      },
+      {
+        fields: ["is_active"],
+      },
+    ],
   }
 );
 

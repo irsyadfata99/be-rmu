@@ -1,5 +1,6 @@
 // ============================================
-// 1. src/models/User.js
+// src/models/User.js
+// User model untuk authentication
 // ============================================
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
@@ -21,11 +22,11 @@ const User = sequelize.define(
       },
       validate: {
         notEmpty: {
-          msg: "Username tidak boleh kosong",
+          msg: "Username harus diisi",
         },
         len: {
           args: [3, 50],
-          msg: "Username harus 3-50 karakter",
+          msg: "Username minimal 3 karakter",
         },
         is: {
           args: /^[a-zA-Z0-9_]+$/,
@@ -41,7 +42,7 @@ const User = sequelize.define(
       },
       validate: {
         notEmpty: {
-          msg: "Email tidak boleh kosong",
+          msg: "Email harus diisi",
         },
         isEmail: {
           msg: "Format email tidak valid",
@@ -53,11 +54,11 @@ const User = sequelize.define(
       allowNull: false,
       validate: {
         notEmpty: {
-          msg: "Nama tidak boleh kosong",
+          msg: "Nama harus diisi",
         },
         len: {
           args: [3, 100],
-          msg: "Nama harus 3-100 karakter",
+          msg: "Nama minimal 3 karakter",
         },
       },
     },
@@ -66,7 +67,7 @@ const User = sequelize.define(
       allowNull: false,
       validate: {
         notEmpty: {
-          msg: "Password tidak boleh kosong",
+          msg: "Password harus diisi",
         },
         len: {
           args: [6, 255],
@@ -87,23 +88,39 @@ const User = sequelize.define(
     },
     isActive: {
       type: DataTypes.BOOLEAN,
-      defaultValue: true,
       allowNull: false,
+      defaultValue: true,
     },
   },
   {
     tableName: "users",
     timestamps: true,
     underscored: true,
+    indexes: [
+      {
+        unique: true,
+        fields: ["username"],
+      },
+      {
+        unique: true,
+        fields: ["email"],
+      },
+      {
+        fields: ["role"],
+      },
+      {
+        fields: ["is_active"],
+      },
+    ],
     hooks: {
-      // Hash password before create
+      // Hash password before creating user
       beforeCreate: async (user) => {
         if (user.password) {
           const salt = await bcrypt.genSalt(10);
           user.password = await bcrypt.hash(user.password, salt);
         }
       },
-      // Hash password before update
+      // Hash password before updating user
       beforeUpdate: async (user) => {
         if (user.changed("password")) {
           const salt = await bcrypt.genSalt(10);
@@ -114,12 +131,22 @@ const User = sequelize.define(
   }
 );
 
-// Instance method to compare password
+// ============================================
+// INSTANCE METHODS
+// ============================================
+
+/**
+ * Compare password
+ * @param {string} candidatePassword - Password to compare
+ * @returns {Promise<boolean>}
+ */
 User.prototype.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Instance method to get user data without password
+/**
+ * Get user without password
+ */
 User.prototype.toJSON = function () {
   const values = { ...this.get() };
   delete values.password;
