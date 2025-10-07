@@ -65,27 +65,42 @@ class AuthController {
   }
 
   // POST /api/auth/login - Login user
+  // POST /api/auth/login - Login user
   static async login(req, res, next) {
     try {
+      console.log("🔐 Login attempt:", req.body); // ADD THIS LOG
+
       const { username, password } = req.body;
 
       // Validation
       if (!username || !password) {
-        return ApiResponse.error(res, "Username dan password harus diisi", 422, {
-          username: !username ? ["Username harus diisi"] : undefined,
-          password: !password ? ["Password harus diisi"] : undefined,
-        });
+        console.log("❌ Validation failed: Missing credentials"); // ADD THIS
+        return ApiResponse.error(
+          res,
+          "Username dan password harus diisi",
+          422,
+          {
+            username: !username ? ["Username harus diisi"] : undefined,
+            password: !password ? ["Password harus diisi"] : undefined,
+          }
+        );
       }
+
+      console.log("🔍 Searching user:", username); // ADD THIS
 
       // Find user by username
       const user = await User.findOne({ where: { username } });
 
       if (!user) {
+        console.log("❌ User not found:", username); // ADD THIS
         return ApiResponse.error(res, "Username atau password salah", 401);
       }
 
+      console.log("✅ User found:", user.username, "- Role:", user.role); // ADD THIS
+
       // Check if user is active
       if (!user.isActive) {
+        console.log("❌ User inactive:", username); // ADD THIS
         return ApiResponse.error(res, "User tidak aktif", 403);
       }
 
@@ -93,11 +108,20 @@ class AuthController {
       const isPasswordValid = await user.comparePassword(password);
 
       if (!isPasswordValid) {
+        console.log("❌ Invalid password for:", username); // ADD THIS
         return ApiResponse.error(res, "Username atau password salah", 401);
       }
 
+      console.log("✅ Password valid, generating token..."); // ADD THIS
+
       // Generate JWT token
-      const token = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || "7d" });
+      const token = jwt.sign(
+        { userId: user.id, role: user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
+      );
+
+      console.log("✅ Login successful for:", username); // ADD THIS
 
       return ApiResponse.success(
         res,
@@ -115,6 +139,7 @@ class AuthController {
         "Login berhasil"
       );
     } catch (error) {
+      console.error("❌ Login error:", error); // ADD THIS
       next(error);
     }
   }
@@ -151,7 +176,11 @@ class AuthController {
 
       // Validation
       if (!oldPassword || !newPassword) {
-        return ApiResponse.error(res, "Password lama dan baru harus diisi", 422);
+        return ApiResponse.error(
+          res,
+          "Password lama dan baru harus diisi",
+          422
+        );
       }
 
       if (newPassword.length < 6) {
