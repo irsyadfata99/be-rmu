@@ -1,5 +1,5 @@
 // ============================================
-// src/seeders/seedProducts.js
+// src/seeders/seedProducts.js (FIXED)
 // Seeder untuk membuat data produk dummy
 // ============================================
 const { sequelize } = require("../config/database");
@@ -272,13 +272,13 @@ const seedProducts = async () => {
 
     if (categoryCount === 0) {
       console.log("❌ No categories found! Please seed categories first.");
-      console.log("Run: node src/seeders/seedCategories.js\n");
+      console.log("Run: npm run seed:categories\n");
       process.exit(1);
     }
 
     if (supplierCount === 0) {
       console.log("❌ No suppliers found! Please seed suppliers first.");
-      console.log("Run: node src/seeders/seedSuppliers.js\n");
+      console.log("Run: npm run seed:suppliers\n");
       process.exit(1);
     }
 
@@ -375,23 +375,24 @@ const seedProducts = async () => {
     console.log(`Out of stock products: ${outOfStockProducts.length}`);
     console.log("=".repeat(70) + "\n");
 
-    // Show products by category
+    // FIXED: Show products by category WITHOUT using include
     console.log("📦 PRODUCTS BY CATEGORY");
     console.log("=".repeat(70));
 
     const categories = await Category.findAll({
-      include: [
-        {
-          model: Product,
-          as: "products",
-        },
-      ],
+      order: [["name", "ASC"]],
     });
 
     for (const category of categories) {
-      if (category.products.length > 0) {
-        console.log(`\n${category.name}: ${category.products.length} product(s)`);
-        category.products.forEach((p) => {
+      // Get products for this category separately
+      const products = await Product.findAll({
+        where: { categoryId: category.id, isActive: true },
+        order: [["name", "ASC"]],
+      });
+
+      if (products.length > 0) {
+        console.log(`\n${category.name}: ${products.length} product(s)`);
+        products.forEach((p) => {
           let badge = "✅";
           if (p.stock === 0) badge = "❌";
           else if (p.isLowStock()) badge = "⚠️ ";

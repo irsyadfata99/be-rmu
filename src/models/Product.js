@@ -1,5 +1,5 @@
 // ============================================
-// src/models/Product.js
+// src/models/Product.js (FIXED)
 // Model untuk master data produk/barang
 // ============================================
 const { DataTypes } = require("sequelize");
@@ -248,10 +248,11 @@ Product.generateSKU = async function () {
   const dateStr = `${year}${month}${day}`;
 
   // Cari produk terakhir hari ini
+  const { Op } = require("sequelize");
   const lastProduct = await this.findOne({
     where: {
       sku: {
-        [require("sequelize").Op.like]: `PRD-${dateStr}-%`,
+        [Op.like]: `PRD-${dateStr}-%`,
       },
     },
     order: [["sku", "DESC"]],
@@ -269,47 +270,25 @@ Product.generateSKU = async function () {
 };
 
 /**
- * Search product by barcode
+ * Search product by barcode (FIXED: removed include)
  */
 Product.findByBarcode = async function (barcode) {
   return await this.findOne({
     where: { barcode, isActive: true },
-    include: [
-      {
-        association: "category",
-        attributes: ["id", "name"],
-      },
-      {
-        association: "supplier",
-        attributes: ["id", "code", "name"],
-        required: false,
-      },
-    ],
   });
 };
 
 /**
- * Search product by SKU
+ * Search product by SKU (FIXED: removed include)
  */
 Product.findBySKU = async function (sku) {
   return await this.findOne({
     where: { sku, isActive: true },
-    include: [
-      {
-        association: "category",
-        attributes: ["id", "name"],
-      },
-      {
-        association: "supplier",
-        attributes: ["id", "code", "name"],
-        required: false,
-      },
-    ],
   });
 };
 
 /**
- * Get products with low stock
+ * Get products with low stock (FIXED: removed include to prevent error)
  */
 Product.getLowStock = async function () {
   const { Op } = require("sequelize");
@@ -318,18 +297,12 @@ Product.getLowStock = async function () {
       isActive: true,
       [Op.or]: [sequelize.where(sequelize.col("stock"), "<=", sequelize.col("min_stock"))],
     },
-    include: [
-      {
-        association: "category",
-        attributes: ["id", "name"],
-      },
-    ],
     order: [["stock", "ASC"]],
   });
 };
 
 /**
- * Get out of stock products
+ * Get out of stock products (FIXED: removed include)
  */
 Product.getOutOfStock = async function () {
   return await this.findAll({
@@ -337,12 +310,6 @@ Product.getOutOfStock = async function () {
       isActive: true,
       stock: 0,
     },
-    include: [
-      {
-        association: "category",
-        attributes: ["id", "name"],
-      },
-    ],
     order: [["name", "ASC"]],
   });
 };
