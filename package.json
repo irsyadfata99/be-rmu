@@ -12,6 +12,7 @@
     "seed:product": "node src/seeders/seedProducts.js",
     "seed:suppliers": "node src/seeders/seedSuppliers.js",
     "seed:categories": "node src/seeders/seedCategories.js",
+    "seed:settings": "node src/seeders/seedSettings.js",
     "test": "node test-api.js"
   },
   "keywords": [

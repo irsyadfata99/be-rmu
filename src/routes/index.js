@@ -1,15 +1,22 @@
 // ============================================
-// src/routes/index.js (UPDATED)
+// src/routes/index.js (COMPLETE - ALL ROUTES REGISTERED)
 // Main router - menggabungkan semua routes
 // ============================================
 const express = require("express");
 const router = express.Router();
 
-// Import route modules
+// ============================================
+// IMPORT ALL ROUTE MODULES
+// ============================================
 const authRoutes = require("./authRoutes");
 const categoryRoutes = require("./categoryRoutes");
 const memberRoutes = require("./memberRoutes");
-const productRoutes = require("./productRoutes"); // NEW!
+const productRoutes = require("./productRoutes");
+const supplierRoutes = require("./supplierRoutes");
+const saleRoutes = require("./saleRoutes");
+const purchaseRoutes = require("./purchaseRoutes");
+const paymentRoutes = require("./paymentRoutes");
+const stockRoutes = require("./stockRoutes");
 
 // ============================================
 // HEALTH CHECK
@@ -47,9 +54,39 @@ router.use("/members", memberRoutes);
 
 /**
  * @route   /api/products/*
- * @desc    Product management routes (NEW!)
+ * @desc    Product management routes
  */
 router.use("/products", productRoutes);
+
+/**
+ * @route   /api/suppliers/*
+ * @desc    Supplier management routes
+ */
+router.use("/suppliers", supplierRoutes);
+
+/**
+ * @route   /api/sales/*
+ * @desc    Sales transaction routes (POS)
+ */
+router.use("/sales", saleRoutes);
+
+/**
+ * @route   /api/purchases/*
+ * @desc    Purchase transaction routes
+ */
+router.use("/purchases", purchaseRoutes);
+
+/**
+ * @route   /api/payments/*
+ * @desc    Payment & debt management routes
+ */
+router.use("/payments", paymentRoutes);
+
+/**
+ * @route   /api/stock/*
+ * @desc    Stock movement & adjustment routes
+ */
+router.use("/stock", stockRoutes);
 
 // ============================================
 // API INFO (Root endpoint)
@@ -64,7 +101,12 @@ router.get("/", (req, res) => {
       auth: "/api/auth",
       categories: "/api/categories",
       members: "/api/members",
-      products: "/api/products", // NEW!
+      products: "/api/products",
+      suppliers: "/api/suppliers",
+      sales: "/api/sales",
+      purchases: "/api/purchases",
+      payments: "/api/payments",
+      stock: "/api/stock",
     },
     documentation: "See README.md for API documentation",
   });
