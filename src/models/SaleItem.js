@@ -1,7 +1,9 @@
 // ============================================
-// src/models/SaleItem.js
-// Model untuk detail item penjualan
+// src/models/SaleItem.js (UPDATED - WITH POINTS EARNED)
 // ============================================
+const { DataTypes } = require("sequelize");
+const { sequelize } = require("../config/database");
+
 const SaleItem = sequelize.define(
   "SaleItem",
   {
@@ -72,6 +74,20 @@ const SaleItem = sequelize.define(
       },
       comment: "quantity * sellingPrice",
     },
+    // ===== NEW: POINTS EARNED =====
+    pointsEarned: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      validate: {
+        min: {
+          args: [0],
+          msg: "Points earned tidak boleh negatif",
+        },
+      },
+      comment: "Point yang didapat dari item ini",
+    },
+    // ==============================
   },
   {
     tableName: "sale_items",
@@ -89,37 +105,24 @@ const SaleItem = sequelize.define(
 );
 
 // ============================================
-// ASSOCIATIONS
-// ============================================
-Sale.hasMany(SaleItem, {
-  foreignKey: "saleId",
-  as: "items",
-  onDelete: "CASCADE",
-});
-
-SaleItem.belongsTo(Sale, {
-  foreignKey: "saleId",
-  as: "sale",
-});
-
-// ============================================
 // INSTANCE METHODS
 // ============================================
 
 /**
- * Calculate totals
+ * Get formatted data for response
  */
-Sale.prototype.calculateTotals = function () {
-  this.finalAmount = this.totalAmount - this.discountAmount;
-  this.remainingDebt = this.finalAmount - this.dpAmount;
-  this.changeAmount = this.paymentReceived - this.finalAmount;
+SaleItem.prototype.toJSON = function () {
+  const values = { ...this.get() };
+
+  // Format decimals to number
+  if (values.sellingPrice) {
+    values.sellingPrice = parseFloat(values.sellingPrice);
+  }
+  if (values.subtotal) {
+    values.subtotal = parseFloat(values.subtotal);
+  }
+
+  return values;
 };
 
-/**
- * Check if fully paid
- */
-Sale.prototype.isFullyPaid = function () {
-  return parseFloat(this.remainingDebt) === 0;
-};
-
-module.exports = { Sale, SaleItem };
+module.exports = SaleItem;

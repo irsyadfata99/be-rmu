@@ -1,6 +1,5 @@
 // ============================================
-// src/models/Category.js
-// Category model untuk kategori produk
+// src/models/Category.js (UPDATED - WITH POINTS MULTIPLIER)
 // ============================================
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
@@ -39,6 +38,24 @@ const Category = sequelize.define(
         },
       },
     },
+    // ===== NEW: POINTS MULTIPLIER =====
+    pointsMultiplier: {
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: false,
+      defaultValue: 1.0,
+      validate: {
+        min: {
+          args: [0],
+          msg: "Points multiplier tidak boleh negatif",
+        },
+        max: {
+          args: [100],
+          msg: "Points multiplier maksimal 100",
+        },
+      },
+      comment: "Pengali point untuk mode PER_CATEGORY (1.0 = normal, 1.5 = bonus 50%, 2.0 = double)",
+    },
+    // ==================================
     isActive: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
@@ -60,5 +77,23 @@ const Category = sequelize.define(
     ],
   }
 );
+
+// ============================================
+// INSTANCE METHODS
+// ============================================
+
+/**
+ * Get formatted data for response
+ */
+Category.prototype.toJSON = function () {
+  const values = { ...this.get() };
+
+  // Format decimal to number
+  if (values.pointsMultiplier) {
+    values.pointsMultiplier = parseFloat(values.pointsMultiplier);
+  }
+
+  return values;
+};
 
 module.exports = Category;

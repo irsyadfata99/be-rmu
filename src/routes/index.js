@@ -1,6 +1,5 @@
 // ============================================
-// src/routes/index.js (UPDATED - WITH RETURNS)
-// Main router - menggabungkan semua routes
+// src/routes/index.js (UPDATED - WITH POINT ROUTES)
 // ============================================
 const express = require("express");
 const router = express.Router();
@@ -17,7 +16,8 @@ const saleRoutes = require("./saleRoutes");
 const purchaseRoutes = require("./purchaseRoutes");
 const paymentRoutes = require("./paymentRoutes");
 const stockRoutes = require("./stockRoutes");
-const returnRoutes = require("./returnRoutes"); // NEW!
+const returnRoutes = require("./returnRoutes");
+const pointRoutes = require("./pointRoutes"); // NEW!
 
 // ============================================
 // HEALTH CHECK
@@ -91,9 +91,15 @@ router.use("/stock", stockRoutes);
 
 /**
  * @route   /api/returns/*
- * @desc    Purchase & Sales return routes (NEW!)
+ * @desc    Purchase & Sales return routes
  */
 router.use("/returns", returnRoutes);
+
+/**
+ * @route   /api/points/*
+ * @desc    Point management routes (NEW!)
+ */
+router.use("/points", pointRoutes);
 
 // ============================================
 // API INFO (Root endpoint)
@@ -114,7 +120,8 @@ router.get("/", (req, res) => {
       purchases: "/api/purchases",
       payments: "/api/payments",
       stock: "/api/stock",
-      returns: "/api/returns", // NEW!
+      returns: "/api/returns",
+      points: "/api/points", // NEW!
     },
     documentation: "See README.md for API documentation",
   });

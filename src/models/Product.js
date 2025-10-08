@@ -1,5 +1,5 @@
 // ============================================
-// src/models/Product.js (FIXED)
+// src/models/Product.js (UPDATED - WITH POINTS PER UNIT)
 // Model untuk master data produk/barang
 // ============================================
 const { DataTypes } = require("sequelize");
@@ -115,6 +115,20 @@ const Product = sequelize.define(
       },
       comment: "Batas minimum stok untuk alert",
     },
+    // ===== NEW: POINTS PER UNIT =====
+    pointsPerUnit: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+      defaultValue: 0,
+      validate: {
+        min: {
+          args: [0],
+          msg: "Points per unit tidak boleh negatif",
+        },
+      },
+      comment: "Point yang didapat per unit produk (untuk mode PER_PRODUCT, 0 = gunakan global rate)",
+    },
+    // ================================
     description: {
       type: DataTypes.TEXT,
       allowNull: true,
@@ -223,6 +237,9 @@ Product.prototype.toJSON = function () {
   if (values.sellingPrice) {
     values.sellingPrice = parseFloat(values.sellingPrice);
   }
+  if (values.pointsPerUnit) {
+    values.pointsPerUnit = parseFloat(values.pointsPerUnit);
+  }
 
   // Add computed fields
   values.profitMargin = this.getProfitMargin();
@@ -270,7 +287,7 @@ Product.generateSKU = async function () {
 };
 
 /**
- * Search product by barcode (FIXED: removed include)
+ * Search product by barcode
  */
 Product.findByBarcode = async function (barcode) {
   return await this.findOne({
@@ -279,7 +296,7 @@ Product.findByBarcode = async function (barcode) {
 };
 
 /**
- * Search product by SKU (FIXED: removed include)
+ * Search product by SKU
  */
 Product.findBySKU = async function (sku) {
   return await this.findOne({
@@ -288,7 +305,7 @@ Product.findBySKU = async function (sku) {
 };
 
 /**
- * Get products with low stock (FIXED: removed include to prevent error)
+ * Get products with low stock
  */
 Product.getLowStock = async function () {
   const { Op } = require("sequelize");
@@ -302,7 +319,7 @@ Product.getLowStock = async function () {
 };
 
 /**
- * Get out of stock products (FIXED: removed include)
+ * Get out of stock products
  */
 Product.getOutOfStock = async function () {
   return await this.findAll({

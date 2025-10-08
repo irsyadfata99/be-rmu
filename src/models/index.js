@@ -1,6 +1,5 @@
 // ============================================
-// src/models/index.js (UPDATED WITH TIER 1 MODELS)
-// Central file untuk import semua models dan setup associations
+// src/models/index.js (UPDATED - WITH POINT TRANSACTION)
 // ============================================
 
 // Import existing models
@@ -9,22 +8,17 @@ const Member = require("./Member");
 const Category = require("./Category");
 const Supplier = require("./Supplier");
 const Setting = require("./Setting");
-
-// Import TIER 1 models (NEW!)
 const Product = require("./Product");
 const { MemberDebt, DebtPayment } = require("./MemberDebt");
 const SupplierDebt = require("./SupplierDebt");
 const { StockMovement, StockAdjustment } = require("./StockMovement");
+const { Purchase, PurchaseItem } = require("./Purchase");
+const { Sale, SaleItem } = require("./Sale");
+const { PurchaseReturn, PurchaseReturnItem } = require("./PurchaseReturn");
+const { SalesReturn, SalesReturnItem } = require("./SalesReturn");
 
-// Import other models (already exist)
-const Purchase = require("./Purchase");
-const PurchaseItem = require("./PurchaseItem");
-const Sale = require("./Sale");
-const SaleItem = require("./SaleItem");
-const PurchaseReturn = require("./PurchaseReturn");
-const PurchaseReturnItem = require("./PurchaseReturnItem");
-const SalesReturn = require("./SalesReturn");
-const SalesReturnItem = require("./SalesReturnItem");
+// ===== NEW: IMPORT POINT TRANSACTION =====
+const PointTransaction = require("./PointTransaction");
 
 // ============================================
 // SETUP ASSOCIATIONS
@@ -375,6 +369,41 @@ SalesReturnItem.belongsTo(Product, {
   as: "product",
 });
 
+// ===== NEW: POINT TRANSACTION ASSOCIATIONS =====
+
+// PointTransaction <-> Member
+Member.hasMany(PointTransaction, {
+  foreignKey: "memberId",
+  as: "pointTransactions",
+});
+
+PointTransaction.belongsTo(Member, {
+  foreignKey: "memberId",
+  as: "member",
+});
+
+// PointTransaction <-> Sale
+Sale.hasMany(PointTransaction, {
+  foreignKey: "saleId",
+  as: "pointTransactions",
+});
+
+PointTransaction.belongsTo(Sale, {
+  foreignKey: "saleId",
+  as: "sale",
+});
+
+// PointTransaction <-> User (creator)
+User.hasMany(PointTransaction, {
+  foreignKey: "createdBy",
+  as: "pointTransactions",
+});
+
+PointTransaction.belongsTo(User, {
+  foreignKey: "createdBy",
+  as: "creator",
+});
+
 // ============================================
 // EXPORT ALL MODELS
 // ============================================
@@ -386,7 +415,7 @@ module.exports = {
   Supplier,
   Setting,
 
-  // TIER 1 (NEW!)
+  // Products & Stock
   Product,
   MemberDebt,
   DebtPayment,
@@ -405,4 +434,7 @@ module.exports = {
   PurchaseReturnItem,
   SalesReturn,
   SalesReturnItem,
+
+  // ===== NEW =====
+  PointTransaction,
 };
