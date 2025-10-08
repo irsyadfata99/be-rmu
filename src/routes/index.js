@@ -46,6 +46,7 @@ router.use("/auth", authRoutes);
  * @desc    Category management routes
  */
 router.use("/categories", categoryRoutes);
+router.use("/products/categories", categoryRoutes);
 
 /**
  * @route   /api/members/*
