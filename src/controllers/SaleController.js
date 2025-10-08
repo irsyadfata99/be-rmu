@@ -1,16 +1,17 @@
 // ============================================
-// src/controllers/SaleController.js (UPDATED WITH POINTS)
+// src/controllers/SaleController.js (COMPLETE WITH POINTS)
 // ============================================
 const { Sale, SaleItem } = require("../models/Sale");
 const Product = require("../models/Product");
 const Member = require("../models/Member");
+const User = require("../models/User");
 const { MemberDebt } = require("../models/MemberDebt");
 const { StockMovement } = require("../models/StockMovement");
 const PointTransaction = require("../models/PointTransaction");
 const ApiResponse = require("../utils/response");
 const { generateInvoiceNumber } = require("../utils/invoiceGenerator");
 const { generateDotMatrixInvoice, generateThermalReceipt } = require("../utils/printFormatter");
-const { calculateTransactionPoints } = require("../utils/pointCalculator"); // NEW!
+const { calculateTransactionPoints } = require("../utils/pointCalculator");
 const { sequelize } = require("../config/database");
 const { Op } = require("sequelize");
 
@@ -87,7 +88,12 @@ class SaleController {
       }
 
       // ===== CALCULATE POINTS (NEW!) =====
-      const pointsResult = member ? await calculateTransactionPoints(processedItems) : { totalPoints: 0, itemsWithPoints: processedItems.map((i) => ({ ...i, pointsEarned: 0 })) };
+      const pointsResult = member
+        ? await calculateTransactionPoints(processedItems)
+        : {
+            totalPoints: 0,
+            itemsWithPoints: processedItems.map((i) => ({ ...i, pointsEarned: 0 })),
+          };
       const totalPointsEarned = pointsResult.totalPoints;
       const itemsWithPoints = pointsResult.itemsWithPoints;
 
@@ -243,7 +249,273 @@ class SaleController {
     }
   }
 
-  // ... (getAll, getById, printInvoice, printThermal, getStats methods tetap sama seperti sebelumnya)
+  // ============================================
+  // GET /api/sales - Get All Sales
+  // ============================================
+  static async getAll(req, res, next) {
+    try {
+      const { page = 1, limit = 10, search = "", saleType, status, memberId, startDate, endDate, sortBy = "saleDate", sortOrder = "DESC" } = req.query;
+
+      const offset = (parseInt(page) - 1) * parseInt(limit);
+      const whereClause = {};
+
+      // Search by invoice number
+      if (search) {
+        whereClause.invoiceNumber = {
+          [Op.like]: `%${search}%`,
+        };
+      }
+
+      // Filter by type
+      if (saleType) {
+        whereClause.saleType = saleType;
+      }
+
+      // Filter by status
+      if (status) {
+        whereClause.status = status;
+      }
+
+      // Filter by member
+      if (memberId) {
+        whereClause.memberId = memberId;
+      }
+
+      // Filter by date range
+      if (startDate && endDate) {
+        whereClause.saleDate = {
+          [Op.between]: [new Date(startDate), new Date(endDate)],
+        };
+      } else if (startDate) {
+        whereClause.saleDate = {
+          [Op.gte]: new Date(startDate),
+        };
+      } else if (endDate) {
+        whereClause.saleDate = {
+          [Op.lte]: new Date(endDate),
+        };
+      }
+
+      const { count, rows } = await Sale.findAndCountAll({
+        where: whereClause,
+        limit: parseInt(limit),
+        offset: offset,
+        order: [[sortBy, sortOrder.toUpperCase()]],
+        include: [
+          {
+            model: Member,
+            as: "member",
+            attributes: ["id", "uniqueId", "fullName"],
+          },
+          {
+            model: User,
+            as: "user",
+            attributes: ["id", "name", "username"],
+          },
+        ],
+      });
+
+      const pagination = {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: count,
+        totalPages: Math.ceil(count / parseInt(limit)),
+      };
+
+      return ApiResponse.paginated(res, rows, pagination, "Penjualan berhasil diambil");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ============================================
+  // GET /api/sales/:id - Get Sale Detail
+  // ============================================
+  static async getById(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      const sale = await Sale.findByPk(id, {
+        include: [
+          {
+            model: SaleItem,
+            as: "items",
+          },
+          {
+            model: Member,
+            as: "member",
+            attributes: ["id", "uniqueId", "fullName", "whatsapp", "address", "totalPoints"],
+          },
+          {
+            model: User,
+            as: "user",
+            attributes: ["id", "name", "username"],
+          },
+          {
+            model: MemberDebt,
+            as: "debt",
+            required: false,
+          },
+        ],
+      });
+
+      if (!sale) {
+        return ApiResponse.notFound(res, "Transaksi tidak ditemukan");
+      }
+
+      return ApiResponse.success(res, sale, "Detail transaksi berhasil diambil");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ============================================
+  // GET /api/sales/stats - Get Sales Statistics
+  // ============================================
+  static async getStats(req, res, next) {
+    try {
+      const { startDate, endDate } = req.query;
+
+      const whereClause = {};
+
+      if (startDate && endDate) {
+        whereClause.saleDate = {
+          [Op.between]: [new Date(startDate), new Date(endDate)],
+        };
+      }
+
+      const totalSales = await Sale.count({ where: whereClause });
+
+      const totalRevenue = await Sale.sum("finalAmount", {
+        where: whereClause,
+      });
+
+      const tunaiSales = await Sale.count({
+        where: { ...whereClause, saleType: "TUNAI" },
+      });
+
+      const kreditSales = await Sale.count({
+        where: { ...whereClause, saleType: "KREDIT" },
+      });
+
+      const pendingDebts = await Sale.sum("remainingDebt", {
+        where: {
+          ...whereClause,
+          saleType: "KREDIT",
+          status: { [Op.in]: ["PENDING", "PARTIAL"] },
+        },
+      });
+
+      const stats = {
+        totalSales,
+        totalRevenue: parseFloat(totalRevenue || 0).toFixed(2),
+        tunaiSales,
+        kreditSales,
+        pendingDebts: parseFloat(pendingDebts || 0).toFixed(2),
+      };
+
+      return ApiResponse.success(res, stats, "Statistik penjualan berhasil diambil");
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ============================================
+  // GET /api/sales/:id/print/invoice - Print Dot Matrix (KREDIT)
+  // ============================================
+  static async printInvoice(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      const sale = await Sale.findByPk(id, {
+        include: [
+          {
+            model: SaleItem,
+            as: "items",
+          },
+          {
+            model: Member,
+            as: "member",
+          },
+          {
+            model: User,
+            as: "user",
+          },
+        ],
+      });
+
+      if (!sale) {
+        return ApiResponse.notFound(res, "Transaksi tidak ditemukan");
+      }
+
+      const html = await generateDotMatrixInvoice({
+        invoiceNumber: sale.invoiceNumber,
+        saleDate: sale.saleDate,
+        member: sale.member,
+        items: sale.items,
+        totalAmount: sale.totalAmount,
+        discountAmount: sale.discountAmount,
+        finalAmount: sale.finalAmount,
+        dpAmount: sale.dpAmount,
+        remainingDebt: sale.remainingDebt,
+        dueDate: sale.dueDate,
+        notes: sale.notes,
+      });
+
+      res.setHeader("Content-Type", "text/html");
+      res.send(html);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ============================================
+  // GET /api/sales/:id/print/thermal - Print Thermal (TUNAI)
+  // ============================================
+  static async printThermal(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      const sale = await Sale.findByPk(id, {
+        include: [
+          {
+            model: SaleItem,
+            as: "items",
+          },
+          {
+            model: Member,
+            as: "member",
+          },
+          {
+            model: User,
+            as: "user",
+          },
+        ],
+      });
+
+      if (!sale) {
+        return ApiResponse.notFound(res, "Transaksi tidak ditemukan");
+      }
+
+      const html = await generateThermalReceipt({
+        invoiceNumber: sale.invoiceNumber,
+        saleDate: sale.saleDate,
+        member: sale.member,
+        user: sale.user,
+        items: sale.items,
+        totalAmount: sale.totalAmount,
+        discountAmount: sale.discountAmount,
+        finalAmount: sale.finalAmount,
+        paymentReceived: sale.paymentReceived,
+        changeAmount: sale.changeAmount,
+      });
+
+      res.setHeader("Content-Type", "text/html");
+      res.send(html);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = SaleController;
