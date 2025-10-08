@@ -1,6 +1,5 @@
 // ============================================
-// src/models/Purchase.js
-// Model untuk header pembelian
+// src/models/Purchase.js (FIXED - NO ASSOCIATIONS!)
 // ============================================
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
@@ -124,4 +123,10 @@ const Purchase = sequelize.define(
   }
 );
 
+// ❌ HAPUS SEMUA INI:
+// const PurchaseItem = require("./PurchaseItem");
+// Purchase.hasMany(PurchaseItem, { ... });
+// PurchaseItem.belongsTo(Purchase, { ... });
+
+// ✅ EXPORT HANYA MODEL
 module.exports = Purchase;

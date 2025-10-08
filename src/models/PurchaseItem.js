@@ -1,7 +1,9 @@
 // ============================================
-// src/models/PurchaseItem.js
-// Model untuk detail item pembelian
+// src/models/PurchaseItem.js (FIXED)
 // ============================================
+const { DataTypes } = require("sequelize");
+const { sequelize } = require("../config/database");
+
 const PurchaseItem = sequelize.define(
   "PurchaseItem",
   {
@@ -98,19 +100,3 @@ const PurchaseItem = sequelize.define(
 );
 
 module.exports = PurchaseItem;
-
-// ============================================
-// ASSOCIATIONS
-// ============================================
-Purchase.hasMany(PurchaseItem, {
-  foreignKey: "purchaseId",
-  as: "items",
-  onDelete: "CASCADE",
-});
-
-PurchaseItem.belongsTo(Purchase, {
-  foreignKey: "purchaseId",
-  as: "purchase",
-});
-
-module.exports = { Purchase, PurchaseItem };

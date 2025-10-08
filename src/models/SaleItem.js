@@ -1,5 +1,5 @@
 // ============================================
-// src/models/SaleItem.js (UPDATED - WITH POINTS EARNED)
+// src/models/SaleItem.js (Standalone - No Associations)
 // ============================================
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
@@ -74,7 +74,6 @@ const SaleItem = sequelize.define(
       },
       comment: "quantity * sellingPrice",
     },
-    // ===== NEW: POINTS EARNED =====
     pointsEarned: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -87,7 +86,6 @@ const SaleItem = sequelize.define(
       },
       comment: "Point yang didapat dari item ini",
     },
-    // ==============================
   },
   {
     tableName: "sale_items",
@@ -124,5 +122,8 @@ SaleItem.prototype.toJSON = function () {
 
   return values;
 };
+
+// ⚠️ NO ASSOCIATIONS HERE
+// All associations are in src/models/index.js
 
 module.exports = SaleItem;

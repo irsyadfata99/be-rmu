@@ -2,21 +2,26 @@
 // src/controllers/ReportController.js
 // Controller untuk semua laporan
 // ============================================
-const { Sale, SaleItem } = require("../models/Sale");
-const { Purchase, PurchaseItem } = require("../models/Purchase");
 const {
+  Sale,
+  SaleItem,
+  Purchase,
+  PurchaseItem,
   PurchaseReturn,
   PurchaseReturnItem,
-} = require("../models/PurchaseReturn");
-const { SalesReturn, SalesReturnItem } = require("../models/SalesReturn");
-const { MemberDebt, DebtPayment } = require("../models/MemberDebt");
-const SupplierDebt = require("../models/SupplierDebt");
-const Member = require("../models/Member");
-const Product = require("../models/Product");
-const Category = require("../models/Category");
-const Supplier = require("../models/Supplier");
-const User = require("../models/User");
-const PointTransaction = require("../models/PointTransaction");
+  SalesReturn,
+  SalesReturnItem,
+  MemberDebt,
+  DebtPayment,
+  SupplierDebt,
+  Member,
+  Product,
+  Category,
+  Supplier,
+  User,
+  PointTransaction,
+} = require("../models"); // ← Satu-satunya import models!
+
 const ApiResponse = require("../utils/response");
 const ExcelExporter = require("../utils/excelExporter");
 const { Op } = require("sequelize");

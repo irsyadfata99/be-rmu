@@ -1,6 +1,5 @@
 // ============================================
-// src/models/PurchaseReturn.js (FIXED - COMPLETE)
-// Model untuk retur pembelian (barang kembali ke supplier)
+// src/models/PurchaseReturn.js (FIXED - Remove Associations)
 // ============================================
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
@@ -184,46 +183,6 @@ const PurchaseReturnItem = sequelize.define(
 );
 
 // ============================================
-// ASSOCIATIONS
-// ============================================
-
-// PurchaseReturn <-> PurchaseReturnItem
-PurchaseReturn.hasMany(PurchaseReturnItem, {
-  foreignKey: "purchaseReturnId",
-  as: "items",
-  onDelete: "CASCADE",
-});
-
-PurchaseReturnItem.belongsTo(PurchaseReturn, {
-  foreignKey: "purchaseReturnId",
-  as: "purchaseReturn",
-});
-
-// PurchaseReturn <-> Purchase
-PurchaseReturn.belongsTo(require("./Purchase"), {
-  foreignKey: "purchaseId",
-  as: "purchase",
-});
-
-// PurchaseReturn <-> Supplier
-PurchaseReturn.belongsTo(require("./Supplier"), {
-  foreignKey: "supplierId",
-  as: "supplier",
-});
-
-// PurchaseReturn <-> User
-PurchaseReturn.belongsTo(require("./User"), {
-  foreignKey: "userId",
-  as: "user",
-});
-
-// PurchaseReturnItem <-> Product
-PurchaseReturnItem.belongsTo(require("./Product"), {
-  foreignKey: "productId",
-  as: "product",
-});
-
-// ============================================
 // INSTANCE METHODS
 // ============================================
 
@@ -239,5 +198,10 @@ PurchaseReturnItem.prototype.toJSON = function () {
   values.subtotal = parseFloat(values.subtotal);
   return values;
 };
+
+// ============================================
+// ⚠️ NO ASSOCIATIONS HERE
+// All associations are in src/models/index.js
+// ============================================
 
 module.exports = { PurchaseReturn, PurchaseReturnItem };

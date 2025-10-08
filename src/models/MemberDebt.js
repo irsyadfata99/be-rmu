@@ -1,6 +1,5 @@
 // ============================================
-// src/models/MemberDebt.js
-// Model untuk hutang member & pembayaran hutang
+// src/models/MemberDebt.js (FIXED - Remove all require() in associations)
 // ============================================
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
@@ -117,105 +116,6 @@ const MemberDebt = sequelize.define(
 );
 
 // ============================================
-// INSTANCE METHODS - MEMBER DEBT
-// ============================================
-
-/**
- * Check if debt is overdue
- */
-MemberDebt.prototype.isOverdue = function () {
-  if (this.status === "PAID") return false;
-  return new Date() > new Date(this.dueDate);
-};
-
-/**
- * Get days overdue
- */
-MemberDebt.prototype.getDaysOverdue = function () {
-  if (!this.isOverdue()) return 0;
-  const today = new Date();
-  const dueDate = new Date(this.dueDate);
-  const diffTime = Math.abs(today - dueDate);
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
-};
-
-/**
- * Calculate payment completion percentage
- */
-MemberDebt.prototype.getPaymentPercentage = function () {
-  if (this.totalAmount === 0) return 100;
-  return ((this.paidAmount / this.totalAmount) * 100).toFixed(2);
-};
-
-/**
- * Add payment to this debt
- */
-MemberDebt.prototype.addPayment = async function (amount, userId, paymentMethod = "CASH", notes = null) {
-  if (amount <= 0) {
-    throw new Error("Jumlah pembayaran harus lebih dari 0");
-  }
-
-  if (amount > this.remainingAmount) {
-    throw new Error(`Pembayaran melebihi sisa hutang. Sisa: ${this.remainingAmount}`);
-  }
-
-  // Create payment record
-  const DebtPayment = require("./DebtPayment");
-  const payment = await DebtPayment.create({
-    memberDebtId: this.id,
-    memberId: this.memberId,
-    userId: userId,
-    amount: amount,
-    paymentMethod: paymentMethod,
-    paymentDate: new Date(),
-    notes: notes,
-  });
-
-  // Update debt amounts
-  this.paidAmount = parseFloat(this.paidAmount) + amount;
-  this.remainingAmount = parseFloat(this.totalAmount) - parseFloat(this.paidAmount);
-
-  // Update status
-  if (this.remainingAmount === 0) {
-    this.status = "PAID";
-  } else {
-    this.status = "PARTIAL";
-  }
-
-  await this.save();
-
-  // Update member's total debt
-  const Member = require("./Member");
-  const member = await Member.findByPk(this.memberId);
-  if (member) {
-    member.totalDebt = parseFloat(member.totalDebt) - amount;
-    await member.save();
-  }
-
-  return payment;
-};
-
-/**
- * Get formatted data for response
- */
-MemberDebt.prototype.toJSON = function () {
-  const values = { ...this.get() };
-
-  // Format decimals
-  values.totalAmount = parseFloat(values.totalAmount);
-  values.paidAmount = parseFloat(values.paidAmount);
-  values.remainingAmount = parseFloat(values.remainingAmount);
-
-  // Add computed fields
-  values.isOverdue = this.isOverdue();
-  values.daysOverdue = this.getDaysOverdue();
-  values.paymentPercentage = this.getPaymentPercentage();
-
-  return values;
-};
-
-// ============================================
 // MODEL: DEBT PAYMENT (Riwayat Pembayaran)
 // ============================================
 const DebtPayment = sequelize.define(
@@ -309,6 +209,112 @@ const DebtPayment = sequelize.define(
 );
 
 // ============================================
+// INSTANCE METHODS - MEMBER DEBT
+// ============================================
+
+/**
+ * Check if debt is overdue
+ */
+MemberDebt.prototype.isOverdue = function () {
+  if (this.status === "PAID") return false;
+  return new Date() > new Date(this.dueDate);
+};
+
+/**
+ * Get days overdue
+ */
+MemberDebt.prototype.getDaysOverdue = function () {
+  if (!this.isOverdue()) return 0;
+  const today = new Date();
+  const dueDate = new Date(this.dueDate);
+  const diffTime = Math.abs(today - dueDate);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
+};
+
+/**
+ * Calculate payment completion percentage
+ */
+MemberDebt.prototype.getPaymentPercentage = function () {
+  if (this.totalAmount === 0) return 100;
+  return ((this.paidAmount / this.totalAmount) * 100).toFixed(2);
+};
+
+/**
+ * Add payment to this debt
+ */
+MemberDebt.prototype.addPayment = async function (
+  amount,
+  userId,
+  paymentMethod = "CASH",
+  notes = null
+) {
+  if (amount <= 0) {
+    throw new Error("Jumlah pembayaran harus lebih dari 0");
+  }
+
+  if (amount > this.remainingAmount) {
+    throw new Error(
+      `Pembayaran melebihi sisa hutang. Sisa: ${this.remainingAmount}`
+    );
+  }
+
+  // Create payment record
+  const payment = await DebtPayment.create({
+    memberDebtId: this.id,
+    memberId: this.memberId,
+    userId: userId,
+    amount: amount,
+    paymentMethod: paymentMethod,
+    paymentDate: new Date(),
+    notes: notes,
+  });
+
+  // Update debt amounts
+  this.paidAmount = parseFloat(this.paidAmount) + amount;
+  this.remainingAmount =
+    parseFloat(this.totalAmount) - parseFloat(this.paidAmount);
+
+  // Update status
+  if (this.remainingAmount === 0) {
+    this.status = "PAID";
+  } else {
+    this.status = "PARTIAL";
+  }
+
+  await this.save();
+
+  // Update member's total debt
+  const Member = sequelize.models.Member;
+  const member = await Member.findByPk(this.memberId);
+  if (member) {
+    member.totalDebt = parseFloat(member.totalDebt) - amount;
+    await member.save();
+  }
+
+  return payment;
+};
+
+/**
+ * Get formatted data for response
+ */
+MemberDebt.prototype.toJSON = function () {
+  const values = { ...this.get() };
+
+  // Format decimals
+  values.totalAmount = parseFloat(values.totalAmount);
+  values.paidAmount = parseFloat(values.paidAmount);
+  values.remainingAmount = parseFloat(values.remainingAmount);
+
+  // Add computed fields
+  values.isOverdue = this.isOverdue();
+  values.daysOverdue = this.getDaysOverdue();
+  values.paymentPercentage = this.getPaymentPercentage();
+
+  return values;
+};
+
+// ============================================
 // INSTANCE METHODS - DEBT PAYMENT
 // ============================================
 
@@ -319,42 +325,8 @@ DebtPayment.prototype.toJSON = function () {
 };
 
 // ============================================
-// ASSOCIATIONS
+// ⚠️ ASSOCIATIONS MOVED TO index.js
+// DO NOT PUT ASSOCIATIONS HERE - CAUSES CIRCULAR DEPENDENCY
 // ============================================
-
-// MemberDebt <-> Member
-MemberDebt.belongsTo(require("./Member"), {
-  foreignKey: "memberId",
-  as: "member",
-});
-
-// MemberDebt <-> Sale
-MemberDebt.belongsTo(require("./Sale"), {
-  foreignKey: "saleId",
-  as: "sale",
-});
-
-// MemberDebt <-> DebtPayment
-MemberDebt.hasMany(DebtPayment, {
-  foreignKey: "memberDebtId",
-  as: "payments",
-});
-
-DebtPayment.belongsTo(MemberDebt, {
-  foreignKey: "memberDebtId",
-  as: "debt",
-});
-
-// DebtPayment <-> Member
-DebtPayment.belongsTo(require("./Member"), {
-  foreignKey: "memberId",
-  as: "member",
-});
-
-// DebtPayment <-> User
-DebtPayment.belongsTo(require("./User"), {
-  foreignKey: "userId",
-  as: "user",
-});
 
 module.exports = { MemberDebt, DebtPayment };

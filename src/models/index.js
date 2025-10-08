@@ -1,27 +1,37 @@
 // ============================================
-// src/models/index.js (UPDATED - WITH POINT TRANSACTION)
+// src/models/index.js (FIXED - Complete Associations)
 // ============================================
 
-// Import existing models
+// Import core models
 const User = require("./User");
 const Member = require("./Member");
 const Category = require("./Category");
 const Supplier = require("./Supplier");
 const Setting = require("./Setting");
 const Product = require("./Product");
+
+// Import debt models
 const { MemberDebt, DebtPayment } = require("./MemberDebt");
 const SupplierDebt = require("./SupplierDebt");
+
+// Import stock models
 const { StockMovement, StockAdjustment } = require("./StockMovement");
-const { Purchase, PurchaseItem } = require("./Purchase");
-const { Sale, SaleItem } = require("./Sale");
+
+// Import transaction models - FIXED IMPORT!
+const Purchase = require("./Purchase");
+const PurchaseItem = require("./PurchaseItem");
+const Sale = require("./Sale");
+const SaleItem = require("./SaleItem");
+
+// Import return models
 const { PurchaseReturn, PurchaseReturnItem } = require("./PurchaseReturn");
 const { SalesReturn, SalesReturnItem } = require("./SalesReturn");
 
-// ===== NEW: IMPORT POINT TRANSACTION =====
+// Import point model
 const PointTransaction = require("./PointTransaction");
 
 // ============================================
-// SETUP ASSOCIATIONS
+// SETUP ALL ASSOCIATIONS
 // ============================================
 
 // ========== CATEGORY <-> PRODUCT ==========
@@ -369,7 +379,7 @@ SalesReturnItem.belongsTo(Product, {
   as: "product",
 });
 
-// ===== NEW: POINT TRANSACTION ASSOCIATIONS =====
+// ===== POINT TRANSACTION ASSOCIATIONS =====
 
 // PointTransaction <-> Member
 Member.hasMany(PointTransaction, {
@@ -435,6 +445,6 @@ module.exports = {
   SalesReturn,
   SalesReturnItem,
 
-  // ===== NEW =====
+  // Points
   PointTransaction,
 };

@@ -1,6 +1,5 @@
 // ============================================
-// src/models/SupplierDebt.js
-// Model untuk hutang koperasi ke supplier
+// src/models/SupplierDebt.js (FIXED - Remove Associations)
 // ============================================
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
@@ -147,18 +146,26 @@ SupplierDebt.prototype.getPaymentPercentage = function () {
 /**
  * Add payment to this debt
  */
-SupplierDebt.prototype.addPayment = async function (amount, userId, paymentMethod = "CASH", notes = null) {
+SupplierDebt.prototype.addPayment = async function (
+  amount,
+  userId,
+  paymentMethod = "CASH",
+  notes = null
+) {
   if (amount <= 0) {
     throw new Error("Jumlah pembayaran harus lebih dari 0");
   }
 
   if (amount > this.remainingAmount) {
-    throw new Error(`Pembayaran melebihi sisa hutang. Sisa: ${this.remainingAmount}`);
+    throw new Error(
+      `Pembayaran melebihi sisa hutang. Sisa: ${this.remainingAmount}`
+    );
   }
 
   // Update debt amounts
   this.paidAmount = parseFloat(this.paidAmount) + amount;
-  this.remainingAmount = parseFloat(this.totalAmount) - parseFloat(this.paidAmount);
+  this.remainingAmount =
+    parseFloat(this.totalAmount) - parseFloat(this.paidAmount);
 
   // Update status
   if (this.remainingAmount === 0) {
@@ -170,15 +177,12 @@ SupplierDebt.prototype.addPayment = async function (amount, userId, paymentMetho
   await this.save();
 
   // Update supplier's total debt
-  const Supplier = require("./Supplier");
+  const Supplier = sequelize.models.Supplier;
   const supplier = await Supplier.findByPk(this.supplierId);
   if (supplier) {
     supplier.totalDebt = parseFloat(supplier.totalDebt) - amount;
     await supplier.save();
   }
-
-  // TODO: Create payment record jika diperlukan
-  // (SupplierDebtPayment model - optional)
 
   return this;
 };
@@ -203,19 +207,8 @@ SupplierDebt.prototype.toJSON = function () {
 };
 
 // ============================================
-// ASSOCIATIONS
+// ⚠️ NO ASSOCIATIONS HERE
+// All associations are in src/models/index.js
 // ============================================
-
-// SupplierDebt <-> Supplier
-SupplierDebt.belongsTo(require("./Supplier"), {
-  foreignKey: "supplierId",
-  as: "supplier",
-});
-
-// SupplierDebt <-> Purchase
-SupplierDebt.belongsTo(require("./Purchase"), {
-  foreignKey: "purchaseId",
-  as: "purchase",
-});
 
 module.exports = SupplierDebt;

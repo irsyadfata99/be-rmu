@@ -1,6 +1,5 @@
 // ============================================
-// src/models/Sale.js
-// Model untuk header penjualan (TRANSAKSI UTAMA!)
+// src/models/Sale.js (FIXED)
 // ============================================
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
@@ -15,7 +14,7 @@ const Sale = sequelize.define(
     },
     memberId: {
       type: DataTypes.UUID,
-      allowNull: true, // Nullable untuk transaksi tanpa member
+      allowNull: true,
       references: {
         model: "members",
         key: "id",
@@ -195,4 +194,5 @@ const Sale = sequelize.define(
   }
 );
 
+// ✅ EXPORT ONLY Sale (associations in index.js)
 module.exports = Sale;

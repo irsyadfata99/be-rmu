@@ -1,6 +1,5 @@
 // ============================================
-// src/models/SalesReturn.js
-// Model untuk retur penjualan (barang kembali dari member)
+// src/models/SalesReturn.js (FIXED - COMPLETE)
 // ============================================
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
@@ -111,4 +110,113 @@ const SalesReturn = sequelize.define(
   }
 );
 
-module.exports = SalesReturn;
+const SalesReturnItem = sequelize.define(
+  "SalesReturnItem",
+  {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+    },
+    salesReturnId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: {
+        model: "sales_returns",
+        key: "id",
+      },
+      onDelete: "CASCADE",
+      onUpdate: "CASCADE",
+    },
+    productId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: {
+        model: "products",
+        key: "id",
+      },
+      onDelete: "RESTRICT",
+      onUpdate: "CASCADE",
+    },
+    quantity: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      validate: {
+        min: {
+          args: [1],
+          msg: "Quantity minimal 1",
+        },
+      },
+    },
+    unit: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+    },
+    price: {
+      type: DataTypes.DECIMAL(15, 2),
+      allowNull: false,
+      validate: {
+        min: {
+          args: [0],
+          msg: "Harga tidak boleh negatif",
+        },
+      },
+    },
+    subtotal: {
+      type: DataTypes.DECIMAL(15, 2),
+      allowNull: false,
+      validate: {
+        min: {
+          args: [0],
+          msg: "Subtotal tidak boleh negatif",
+        },
+      },
+    },
+  },
+  {
+    tableName: "sales_return_items",
+    timestamps: true,
+    underscored: true,
+    indexes: [
+      {
+        fields: ["sales_return_id"],
+      },
+      {
+        fields: ["product_id"],
+      },
+    ],
+  }
+);
+
+// ============================================
+// ASSOCIATIONS
+// ============================================
+SalesReturn.hasMany(SalesReturnItem, {
+  foreignKey: "salesReturnId",
+  as: "items",
+  onDelete: "CASCADE",
+});
+
+SalesReturnItem.belongsTo(SalesReturn, {
+  foreignKey: "salesReturnId",
+  as: "salesReturn",
+});
+
+// ============================================
+// INSTANCE METHODS
+// ============================================
+SalesReturn.prototype.toJSON = function () {
+  const values = { ...this.get() };
+  values.totalAmount = parseFloat(values.totalAmount);
+  return values;
+};
+
+SalesReturnItem.prototype.toJSON = function () {
+  const values = { ...this.get() };
+  values.price = parseFloat(values.price);
+  values.subtotal = parseFloat(values.subtotal);
+  return values;
+};
+
+// ✅ EXPORT BOTH!
+module.exports = { SalesReturn, SalesReturnItem };

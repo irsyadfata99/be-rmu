@@ -1,6 +1,5 @@
 // ============================================
-// src/models/StockMovement.js
-// Model untuk tracking pergerakan stok & adjustment
+// src/models/StockMovement.js (FIXED - Remove Associations)
 // ============================================
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
@@ -105,8 +104,14 @@ const StockMovement = sequelize.define(
 /**
  * Record stock IN (barang masuk dari pembelian)
  */
-StockMovement.recordIn = async function (productId, quantity, referenceId, userId, notes = null) {
-  const Product = require("./Product");
+StockMovement.recordIn = async function (
+  productId,
+  quantity,
+  referenceId,
+  userId,
+  notes = null
+) {
+  const Product = sequelize.models.Product;
   const product = await Product.findByPk(productId);
 
   if (!product) {
@@ -133,8 +138,14 @@ StockMovement.recordIn = async function (productId, quantity, referenceId, userI
 /**
  * Record stock OUT (barang keluar dari penjualan)
  */
-StockMovement.recordOut = async function (productId, quantity, referenceId, userId, notes = null) {
-  const Product = require("./Product");
+StockMovement.recordOut = async function (
+  productId,
+  quantity,
+  referenceId,
+  userId,
+  notes = null
+) {
+  const Product = sequelize.models.Product;
   const product = await Product.findByPk(productId);
 
   if (!product) {
@@ -161,8 +172,14 @@ StockMovement.recordOut = async function (productId, quantity, referenceId, user
 /**
  * Record adjustment (penyesuaian manual)
  */
-StockMovement.recordAdjustment = async function (productId, quantity, adjustmentId, userId, notes = null) {
-  const Product = require("./Product");
+StockMovement.recordAdjustment = async function (
+  productId,
+  quantity,
+  adjustmentId,
+  userId,
+  notes = null
+) {
+  const Product = sequelize.models.Product;
   const product = await Product.findByPk(productId);
 
   if (!product) {
@@ -194,7 +211,6 @@ StockMovement.recordAdjustment = async function (productId, quantity, adjustment
 
 // ============================================
 // MODEL: STOCK ADJUSTMENT (Penyesuaian Stok Manual)
-// Untuk barang rusak, bocor, ED, repack, dll
 // ============================================
 const StockAdjustment = sequelize.define(
   "StockAdjustment",
@@ -336,7 +352,8 @@ StockAdjustment.generateAdjustmentNumber = async function () {
   let nextNumber = 1;
 
   if (lastAdjustment) {
-    const lastNumber = parseInt(lastAdjustment.adjustmentNumber.split("-")[2]) || 0;
+    const lastNumber =
+      parseInt(lastAdjustment.adjustmentNumber.split("-")[2]) || 0;
     nextNumber = lastNumber + 1;
   }
 
@@ -366,7 +383,13 @@ StockAdjustment.createAndApply = async function (data) {
   });
 
   // Record stock movement
-  await StockMovement.recordAdjustment(productId, quantity, adjustment.id, userId, `${adjustmentType}: ${reason}`);
+  await StockMovement.recordAdjustment(
+    productId,
+    quantity,
+    adjustment.id,
+    userId,
+    `${adjustmentType}: ${reason}`
+  );
 
   return adjustment;
 };
@@ -381,37 +404,8 @@ StockAdjustment.prototype.toJSON = function () {
 };
 
 // ============================================
-// ASSOCIATIONS
+// ⚠️ NO ASSOCIATIONS HERE
+// All associations are in src/models/index.js
 // ============================================
-
-// StockMovement <-> Product
-StockMovement.belongsTo(require("./Product"), {
-  foreignKey: "productId",
-  as: "product",
-});
-
-// StockMovement <-> User
-StockMovement.belongsTo(require("./User"), {
-  foreignKey: "createdBy",
-  as: "creator",
-});
-
-// StockAdjustment <-> Product
-StockAdjustment.belongsTo(require("./Product"), {
-  foreignKey: "productId",
-  as: "product",
-});
-
-// StockAdjustment <-> User (creator)
-StockAdjustment.belongsTo(require("./User"), {
-  foreignKey: "userId",
-  as: "user",
-});
-
-// StockAdjustment <-> User (approver)
-StockAdjustment.belongsTo(require("./User"), {
-  foreignKey: "approvedBy",
-  as: "approver",
-});
 
 module.exports = { StockMovement, StockAdjustment };
