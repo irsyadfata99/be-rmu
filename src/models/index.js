@@ -1,5 +1,5 @@
 // ============================================
-// src/models/index.js
+// src/models/index.js (UPDATED WITH TIER 1 MODELS)
 // Central file untuk import semua models dan setup associations
 // ============================================
 
@@ -7,28 +7,30 @@
 const User = require("./User");
 const Member = require("./Member");
 const Category = require("./Category");
-
-// Import new models
 const Supplier = require("./Supplier");
-const Product = require("./Product");
 const Setting = require("./Setting");
 
-const { Purchase, PurchaseItem } = require("./Purchase");
-const { Sale, SaleItem } = require("./Sale");
-const { MemberDebt, DebtPayment, SupplierDebt } = require("./MemberDebt");
+// Import TIER 1 models (NEW!)
+const Product = require("./Product");
+const { MemberDebt, DebtPayment } = require("./MemberDebt");
+const SupplierDebt = require("./SupplierDebt");
 const { StockMovement, StockAdjustment } = require("./StockMovement");
-const {
-  PurchaseReturn,
-  PurchaseReturnItem,
-  SalesReturn,
-  SalesReturnItem,
-} = require("./PurchaseReturn");
+
+// Import other models (already exist)
+const Purchase = require("./Purchase");
+const PurchaseItem = require("./PurchaseItem");
+const Sale = require("./Sale");
+const SaleItem = require("./SaleItem");
+const PurchaseReturn = require("./PurchaseReturn");
+const PurchaseReturnItem = require("./PurchaseReturnItem");
+const SalesReturn = require("./SalesReturn");
+const SalesReturnItem = require("./SalesReturnItem");
 
 // ============================================
 // SETUP ASSOCIATIONS
 // ============================================
 
-// Category <-> Product
+// ========== CATEGORY <-> PRODUCT ==========
 Category.hasMany(Product, {
   foreignKey: "categoryId",
   as: "products",
@@ -39,7 +41,18 @@ Product.belongsTo(Category, {
   as: "category",
 });
 
-// Supplier <-> Purchase
+// ========== SUPPLIER <-> PRODUCT ==========
+Supplier.hasMany(Product, {
+  foreignKey: "supplierId",
+  as: "products",
+});
+
+Product.belongsTo(Supplier, {
+  foreignKey: "supplierId",
+  as: "supplier",
+});
+
+// ========== SUPPLIER <-> PURCHASE ==========
 Supplier.hasMany(Purchase, {
   foreignKey: "supplierId",
   as: "purchases",
@@ -50,7 +63,7 @@ Purchase.belongsTo(Supplier, {
   as: "supplier",
 });
 
-// User <-> Purchase
+// ========== USER <-> PURCHASE ==========
 User.hasMany(Purchase, {
   foreignKey: "userId",
   as: "purchases",
@@ -61,10 +74,11 @@ Purchase.belongsTo(User, {
   as: "user",
 });
 
-// Purchase <-> PurchaseItem
+// ========== PURCHASE <-> PURCHASE ITEM ==========
 Purchase.hasMany(PurchaseItem, {
   foreignKey: "purchaseId",
   as: "items",
+  onDelete: "CASCADE",
 });
 
 PurchaseItem.belongsTo(Purchase, {
@@ -72,7 +86,7 @@ PurchaseItem.belongsTo(Purchase, {
   as: "purchase",
 });
 
-// Product <-> PurchaseItem
+// ========== PRODUCT <-> PURCHASE ITEM ==========
 Product.hasMany(PurchaseItem, {
   foreignKey: "productId",
   as: "purchaseItems",
@@ -83,7 +97,7 @@ PurchaseItem.belongsTo(Product, {
   as: "product",
 });
 
-// Member <-> Sale
+// ========== MEMBER <-> SALE ==========
 Member.hasMany(Sale, {
   foreignKey: "memberId",
   as: "sales",
@@ -94,7 +108,7 @@ Sale.belongsTo(Member, {
   as: "member",
 });
 
-// User <-> Sale
+// ========== USER <-> SALE ==========
 User.hasMany(Sale, {
   foreignKey: "userId",
   as: "sales",
@@ -105,10 +119,11 @@ Sale.belongsTo(User, {
   as: "user",
 });
 
-// Sale <-> SaleItem
+// ========== SALE <-> SALE ITEM ==========
 Sale.hasMany(SaleItem, {
   foreignKey: "saleId",
   as: "items",
+  onDelete: "CASCADE",
 });
 
 SaleItem.belongsTo(Sale, {
@@ -116,7 +131,7 @@ SaleItem.belongsTo(Sale, {
   as: "sale",
 });
 
-// Product <-> SaleItem
+// ========== PRODUCT <-> SALE ITEM ==========
 Product.hasMany(SaleItem, {
   foreignKey: "productId",
   as: "saleItems",
@@ -127,7 +142,7 @@ SaleItem.belongsTo(Product, {
   as: "product",
 });
 
-// Member <-> MemberDebt
+// ========== MEMBER <-> MEMBER DEBT ==========
 Member.hasMany(MemberDebt, {
   foreignKey: "memberId",
   as: "debts",
@@ -138,7 +153,7 @@ MemberDebt.belongsTo(Member, {
   as: "member",
 });
 
-// Sale <-> MemberDebt
+// ========== SALE <-> MEMBER DEBT ==========
 Sale.hasOne(MemberDebt, {
   foreignKey: "saleId",
   as: "debt",
@@ -149,7 +164,7 @@ MemberDebt.belongsTo(Sale, {
   as: "sale",
 });
 
-// MemberDebt <-> DebtPayment
+// ========== MEMBER DEBT <-> DEBT PAYMENT ==========
 MemberDebt.hasMany(DebtPayment, {
   foreignKey: "memberDebtId",
   as: "payments",
@@ -160,7 +175,18 @@ DebtPayment.belongsTo(MemberDebt, {
   as: "debt",
 });
 
-// User <-> DebtPayment
+// ========== MEMBER <-> DEBT PAYMENT ==========
+Member.hasMany(DebtPayment, {
+  foreignKey: "memberId",
+  as: "payments",
+});
+
+DebtPayment.belongsTo(Member, {
+  foreignKey: "memberId",
+  as: "member",
+});
+
+// ========== USER <-> DEBT PAYMENT ==========
 User.hasMany(DebtPayment, {
   foreignKey: "userId",
   as: "debtPayments",
@@ -171,7 +197,7 @@ DebtPayment.belongsTo(User, {
   as: "user",
 });
 
-// Supplier <-> SupplierDebt
+// ========== SUPPLIER <-> SUPPLIER DEBT ==========
 Supplier.hasMany(SupplierDebt, {
   foreignKey: "supplierId",
   as: "debts",
@@ -182,7 +208,7 @@ SupplierDebt.belongsTo(Supplier, {
   as: "supplier",
 });
 
-// Purchase <-> SupplierDebt
+// ========== PURCHASE <-> SUPPLIER DEBT ==========
 Purchase.hasOne(SupplierDebt, {
   foreignKey: "purchaseId",
   as: "debt",
@@ -193,7 +219,7 @@ SupplierDebt.belongsTo(Purchase, {
   as: "purchase",
 });
 
-// Product <-> StockMovement
+// ========== PRODUCT <-> STOCK MOVEMENT ==========
 Product.hasMany(StockMovement, {
   foreignKey: "productId",
   as: "stockMovements",
@@ -204,7 +230,7 @@ StockMovement.belongsTo(Product, {
   as: "product",
 });
 
-// User <-> StockMovement
+// ========== USER <-> STOCK MOVEMENT ==========
 User.hasMany(StockMovement, {
   foreignKey: "createdBy",
   as: "stockMovements",
@@ -215,7 +241,7 @@ StockMovement.belongsTo(User, {
   as: "creator",
 });
 
-// Product <-> StockAdjustment
+// ========== PRODUCT <-> STOCK ADJUSTMENT ==========
 Product.hasMany(StockAdjustment, {
   foreignKey: "productId",
   as: "stockAdjustments",
@@ -226,7 +252,7 @@ StockAdjustment.belongsTo(Product, {
   as: "product",
 });
 
-// User <-> StockAdjustment
+// ========== USER <-> STOCK ADJUSTMENT ==========
 User.hasMany(StockAdjustment, {
   foreignKey: "userId",
   as: "stockAdjustments",
@@ -237,7 +263,7 @@ StockAdjustment.belongsTo(User, {
   as: "user",
 });
 
-// Purchase <-> PurchaseReturn
+// ========== PURCHASE <-> PURCHASE RETURN ==========
 Purchase.hasMany(PurchaseReturn, {
   foreignKey: "purchaseId",
   as: "returns",
@@ -248,7 +274,7 @@ PurchaseReturn.belongsTo(Purchase, {
   as: "purchase",
 });
 
-// Supplier <-> PurchaseReturn
+// ========== SUPPLIER <-> PURCHASE RETURN ==========
 Supplier.hasMany(PurchaseReturn, {
   foreignKey: "supplierId",
   as: "returns",
@@ -259,7 +285,41 @@ PurchaseReturn.belongsTo(Supplier, {
   as: "supplier",
 });
 
-// Sale <-> SalesReturn
+// ========== USER <-> PURCHASE RETURN ==========
+User.hasMany(PurchaseReturn, {
+  foreignKey: "userId",
+  as: "purchaseReturns",
+});
+
+PurchaseReturn.belongsTo(User, {
+  foreignKey: "userId",
+  as: "user",
+});
+
+// ========== PURCHASE RETURN <-> PURCHASE RETURN ITEM ==========
+PurchaseReturn.hasMany(PurchaseReturnItem, {
+  foreignKey: "purchaseReturnId",
+  as: "items",
+  onDelete: "CASCADE",
+});
+
+PurchaseReturnItem.belongsTo(PurchaseReturn, {
+  foreignKey: "purchaseReturnId",
+  as: "purchaseReturn",
+});
+
+// ========== PRODUCT <-> PURCHASE RETURN ITEM ==========
+Product.hasMany(PurchaseReturnItem, {
+  foreignKey: "productId",
+  as: "purchaseReturnItems",
+});
+
+PurchaseReturnItem.belongsTo(Product, {
+  foreignKey: "productId",
+  as: "product",
+});
+
+// ========== SALE <-> SALES RETURN ==========
 Sale.hasMany(SalesReturn, {
   foreignKey: "saleId",
   as: "returns",
@@ -270,7 +330,7 @@ SalesReturn.belongsTo(Sale, {
   as: "sale",
 });
 
-// Member <-> SalesReturn
+// ========== MEMBER <-> SALES RETURN ==========
 Member.hasMany(SalesReturn, {
   foreignKey: "memberId",
   as: "returns",
@@ -281,28 +341,66 @@ SalesReturn.belongsTo(Member, {
   as: "member",
 });
 
+// ========== USER <-> SALES RETURN ==========
+User.hasMany(SalesReturn, {
+  foreignKey: "userId",
+  as: "salesReturns",
+});
+
+SalesReturn.belongsTo(User, {
+  foreignKey: "userId",
+  as: "user",
+});
+
+// ========== SALES RETURN <-> SALES RETURN ITEM ==========
+SalesReturn.hasMany(SalesReturnItem, {
+  foreignKey: "salesReturnId",
+  as: "items",
+  onDelete: "CASCADE",
+});
+
+SalesReturnItem.belongsTo(SalesReturn, {
+  foreignKey: "salesReturnId",
+  as: "salesReturn",
+});
+
+// ========== PRODUCT <-> SALES RETURN ITEM ==========
+Product.hasMany(SalesReturnItem, {
+  foreignKey: "productId",
+  as: "salesReturnItems",
+});
+
+SalesReturnItem.belongsTo(Product, {
+  foreignKey: "productId",
+  as: "product",
+});
+
 // ============================================
 // EXPORT ALL MODELS
 // ============================================
 module.exports = {
-  // Existing
+  // Core
   User,
   Member,
   Category,
-
-  // New
   Supplier,
-  Product,
   Setting,
-  Purchase,
-  PurchaseItem,
-  Sale,
-  SaleItem,
+
+  // TIER 1 (NEW!)
+  Product,
   MemberDebt,
   DebtPayment,
   SupplierDebt,
   StockMovement,
   StockAdjustment,
+
+  // Transactions
+  Purchase,
+  PurchaseItem,
+  Sale,
+  SaleItem,
+
+  // Returns
   PurchaseReturn,
   PurchaseReturnItem,
   SalesReturn,

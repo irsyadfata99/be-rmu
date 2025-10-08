@@ -1,5 +1,5 @@
 // ============================================
-// src/routes/index.js
+// src/routes/index.js (UPDATED)
 // Main router - menggabungkan semua routes
 // ============================================
 const express = require("express");
@@ -9,6 +9,7 @@ const router = express.Router();
 const authRoutes = require("./authRoutes");
 const categoryRoutes = require("./categoryRoutes");
 const memberRoutes = require("./memberRoutes");
+const productRoutes = require("./productRoutes"); // NEW!
 
 // ============================================
 // HEALTH CHECK
@@ -44,6 +45,12 @@ router.use("/categories", categoryRoutes);
  */
 router.use("/members", memberRoutes);
 
+/**
+ * @route   /api/products/*
+ * @desc    Product management routes (NEW!)
+ */
+router.use("/products", productRoutes);
+
 // ============================================
 // API INFO (Root endpoint)
 // ============================================
@@ -57,6 +64,7 @@ router.get("/", (req, res) => {
       auth: "/api/auth",
       categories: "/api/categories",
       members: "/api/members",
+      products: "/api/products", // NEW!
     },
     documentation: "See README.md for API documentation",
   });

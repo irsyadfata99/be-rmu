@@ -9,6 +9,9 @@
     "seed": "node src/seeders/createAdminUser.js",
     "seed:members": "node src/seeders/seedMembers.js",
     "seed:members:advanced": "node src/seeders/seedMembersAdvanced.js",
+    "seed:product": "node src/seeders/seedProducts.js",
+    "seed:suppliers": "node src/seeders/seedSuppliers.js",
+    "seed:categories": "node src/seeders/seedCategories.js",
     "test": "node test-api.js"
   },
   "keywords": [
