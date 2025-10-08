@@ -2,6 +2,9 @@
 // src/models/SalesReturn.js
 // Model untuk retur penjualan (barang kembali dari member)
 // ============================================
+const { DataTypes } = require("sequelize");
+const { sequelize } = require("../config/database");
+
 const SalesReturn = sequelize.define(
   "SalesReturn",
   {

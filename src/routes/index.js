@@ -1,5 +1,5 @@
 // ============================================
-// src/routes/index.js (COMPLETE - ALL ROUTES REGISTERED)
+// src/routes/index.js (UPDATED - WITH RETURNS)
 // Main router - menggabungkan semua routes
 // ============================================
 const express = require("express");
@@ -17,6 +17,7 @@ const saleRoutes = require("./saleRoutes");
 const purchaseRoutes = require("./purchaseRoutes");
 const paymentRoutes = require("./paymentRoutes");
 const stockRoutes = require("./stockRoutes");
+const returnRoutes = require("./returnRoutes"); // NEW!
 
 // ============================================
 // HEALTH CHECK
@@ -88,6 +89,12 @@ router.use("/payments", paymentRoutes);
  */
 router.use("/stock", stockRoutes);
 
+/**
+ * @route   /api/returns/*
+ * @desc    Purchase & Sales return routes (NEW!)
+ */
+router.use("/returns", returnRoutes);
+
 // ============================================
 // API INFO (Root endpoint)
 // ============================================
@@ -107,6 +114,7 @@ router.get("/", (req, res) => {
       purchases: "/api/purchases",
       payments: "/api/payments",
       stock: "/api/stock",
+      returns: "/api/returns", // NEW!
     },
     documentation: "See README.md for API documentation",
   });

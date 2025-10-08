@@ -1,5 +1,5 @@
 // ============================================
-// src/models/PurchaseReturn.js
+// src/models/PurchaseReturn.js (FIXED - COMPLETE)
 // Model untuk retur pembelian (barang kembali ke supplier)
 // ============================================
 const { DataTypes } = require("sequelize");
@@ -105,4 +105,139 @@ const PurchaseReturn = sequelize.define(
   }
 );
 
-module.exports = PurchaseReturn;
+const PurchaseReturnItem = sequelize.define(
+  "PurchaseReturnItem",
+  {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+    },
+    purchaseReturnId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: {
+        model: "purchase_returns",
+        key: "id",
+      },
+      onDelete: "CASCADE",
+      onUpdate: "CASCADE",
+    },
+    productId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: {
+        model: "products",
+        key: "id",
+      },
+      onDelete: "RESTRICT",
+      onUpdate: "CASCADE",
+    },
+    quantity: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      validate: {
+        min: {
+          args: [1],
+          msg: "Quantity minimal 1",
+        },
+      },
+    },
+    unit: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+    },
+    price: {
+      type: DataTypes.DECIMAL(15, 2),
+      allowNull: false,
+      validate: {
+        min: {
+          args: [0],
+          msg: "Harga tidak boleh negatif",
+        },
+      },
+    },
+    subtotal: {
+      type: DataTypes.DECIMAL(15, 2),
+      allowNull: false,
+      validate: {
+        min: {
+          args: [0],
+          msg: "Subtotal tidak boleh negatif",
+        },
+      },
+    },
+  },
+  {
+    tableName: "purchase_return_items",
+    timestamps: true,
+    underscored: true,
+    indexes: [
+      {
+        fields: ["purchase_return_id"],
+      },
+      {
+        fields: ["product_id"],
+      },
+    ],
+  }
+);
+
+// ============================================
+// ASSOCIATIONS
+// ============================================
+
+// PurchaseReturn <-> PurchaseReturnItem
+PurchaseReturn.hasMany(PurchaseReturnItem, {
+  foreignKey: "purchaseReturnId",
+  as: "items",
+  onDelete: "CASCADE",
+});
+
+PurchaseReturnItem.belongsTo(PurchaseReturn, {
+  foreignKey: "purchaseReturnId",
+  as: "purchaseReturn",
+});
+
+// PurchaseReturn <-> Purchase
+PurchaseReturn.belongsTo(require("./Purchase"), {
+  foreignKey: "purchaseId",
+  as: "purchase",
+});
+
+// PurchaseReturn <-> Supplier
+PurchaseReturn.belongsTo(require("./Supplier"), {
+  foreignKey: "supplierId",
+  as: "supplier",
+});
+
+// PurchaseReturn <-> User
+PurchaseReturn.belongsTo(require("./User"), {
+  foreignKey: "userId",
+  as: "user",
+});
+
+// PurchaseReturnItem <-> Product
+PurchaseReturnItem.belongsTo(require("./Product"), {
+  foreignKey: "productId",
+  as: "product",
+});
+
+// ============================================
+// INSTANCE METHODS
+// ============================================
+
+PurchaseReturn.prototype.toJSON = function () {
+  const values = { ...this.get() };
+  values.totalAmount = parseFloat(values.totalAmount);
+  return values;
+};
+
+PurchaseReturnItem.prototype.toJSON = function () {
+  const values = { ...this.get() };
+  values.price = parseFloat(values.price);
+  values.subtotal = parseFloat(values.subtotal);
+  return values;
+};
+
+module.exports = { PurchaseReturn, PurchaseReturnItem };
