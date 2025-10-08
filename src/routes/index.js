@@ -1,5 +1,5 @@
 // ============================================
-// src/routes/index.js (UPDATED - WITH POINT ROUTES)
+// src/routes/index.js (UPDATED - ADD REPORT ROUTES)
 // ============================================
 const express = require("express");
 const router = express.Router();
@@ -17,7 +17,8 @@ const purchaseRoutes = require("./purchaseRoutes");
 const paymentRoutes = require("./paymentRoutes");
 const stockRoutes = require("./stockRoutes");
 const returnRoutes = require("./returnRoutes");
-const pointRoutes = require("./pointRoutes"); // NEW!
+const pointRoutes = require("./pointRoutes");
+const reportRoutes = require("./reportRoutes"); // ✨ NEW!
 
 // ============================================
 // HEALTH CHECK
@@ -35,72 +36,19 @@ router.get("/health", (req, res) => {
 // API ROUTES
 // ============================================
 
-/**
- * @route   /api/auth/*
- * @desc    Authentication routes (login, register, etc)
- */
 router.use("/auth", authRoutes);
-
-/**
- * @route   /api/categories/*
- * @desc    Category management routes
- */
 router.use("/categories", categoryRoutes);
 router.use("/products/categories", categoryRoutes);
-
-/**
- * @route   /api/members/*
- * @desc    Member management routes
- */
 router.use("/members", memberRoutes);
-
-/**
- * @route   /api/products/*
- * @desc    Product management routes
- */
 router.use("/products", productRoutes);
-
-/**
- * @route   /api/suppliers/*
- * @desc    Supplier management routes
- */
 router.use("/suppliers", supplierRoutes);
-
-/**
- * @route   /api/sales/*
- * @desc    Sales transaction routes (POS)
- */
 router.use("/sales", saleRoutes);
-
-/**
- * @route   /api/purchases/*
- * @desc    Purchase transaction routes
- */
 router.use("/purchases", purchaseRoutes);
-
-/**
- * @route   /api/payments/*
- * @desc    Payment & debt management routes
- */
 router.use("/payments", paymentRoutes);
-
-/**
- * @route   /api/stock/*
- * @desc    Stock movement & adjustment routes
- */
 router.use("/stock", stockRoutes);
-
-/**
- * @route   /api/returns/*
- * @desc    Purchase & Sales return routes
- */
 router.use("/returns", returnRoutes);
-
-/**
- * @route   /api/points/*
- * @desc    Point management routes (NEW!)
- */
 router.use("/points", pointRoutes);
+router.use("/reports", reportRoutes); // ✨ NEW!
 
 // ============================================
 // API INFO (Root endpoint)
@@ -122,7 +70,8 @@ router.get("/", (req, res) => {
       payments: "/api/payments",
       stock: "/api/stock",
       returns: "/api/returns",
-      points: "/api/points", // NEW!
+      points: "/api/points",
+      reports: "/api/reports", // ✨ NEW!
     },
     documentation: "See README.md for API documentation",
   });
