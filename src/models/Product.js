@@ -126,8 +126,7 @@ const Product = sequelize.define(
           msg: "Points per unit tidak boleh negatif",
         },
       },
-      comment:
-        "Point yang didapat per unit produk (untuk mode PER_PRODUCT, 0 = gunakan global rate)",
+      comment: "Point yang didapat per unit produk (untuk mode PER_PRODUCT, 0 = gunakan global rate)",
     },
     description: {
       type: DataTypes.TEXT,
@@ -219,38 +218,28 @@ Product.prototype.addStock = async function (quantity, transaction = null) {
  * @param {object} transaction - Sequelize transaction (optional)
  */
 Product.prototype.reduceStock = async function (quantity, transaction = null) {
-  // ✅ FIX: Reload dulu untuk get latest stock
+  const { Op } = require("sequelize"); // ✅ Import di awal function
+
   await this.reload({ transaction });
 
-  // Check if stock sufficient
   if (this.stock < quantity) {
-    throw new Error(
-      `Stok tidak cukup untuk ${this.name}. Tersedia: ${this.stock}, Diminta: ${quantity}`
-    );
+    throw new Error(`Stok tidak cukup untuk ${this.name}. Tersedia: ${this.stock}, Diminta: ${quantity}`);
   }
 
-  // ✅ ATOMIC: Menggunakan decrement untuk prevent race condition
   const [affectedCount] = await Product.decrement("stock", {
     by: quantity,
     where: {
       id: this.id,
-      stock: {
-        [require("sequelize").Op.gte]: quantity, // ✅ CRITICAL: Double check di query
-      },
+      stock: { [Op.gte]: quantity }, // ✅ Sekarang pakai variable Op
     },
     transaction: transaction,
   });
 
-  // ✅ CRITICAL: Check if update successful
   if (affectedCount === 0) {
-    throw new Error(
-      `Gagal mengurangi stok ${this.name}. Kemungkinan stok sudah habis atau tidak mencukupi.`
-    );
+    throw new Error(`Gagal mengurangi stok ${this.name}. Kemungkinan stok sudah habis atau tidak mencukupi.`);
   }
 
-  // Reload untuk update instance
   await this.reload({ transaction });
-
   return this;
 };
 
@@ -351,13 +340,7 @@ Product.getLowStock = async function () {
   return await this.findAll({
     where: {
       isActive: true,
-      [Op.or]: [
-        sequelize.where(
-          sequelize.col("stock"),
-          "<=",
-          sequelize.col("min_stock")
-        ),
-      ],
+      [Op.or]: [sequelize.where(sequelize.col("stock"), "<=", sequelize.col("min_stock"))],
     },
     order: [["stock", "ASC"]],
   });

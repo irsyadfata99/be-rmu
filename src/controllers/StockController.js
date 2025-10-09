@@ -16,17 +16,7 @@ class StockController {
    */
   static async getMovements(req, res, next) {
     try {
-      const {
-        page = 1,
-        limit = 10,
-        productId,
-        type,
-        referenceType,
-        startDate,
-        endDate,
-        sortBy = "createdAt",
-        sortOrder = "DESC",
-      } = req.query;
+      const { page = 1, limit = 10, productId, type, referenceType, startDate, endDate, sortBy = "createdAt", sortOrder = "DESC" } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const whereClause = {};
@@ -87,12 +77,7 @@ class StockController {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
 
-      return ApiResponse.paginated(
-        res,
-        rows,
-        pagination,
-        "Stock movement berhasil diambil"
-      );
+      return ApiResponse.paginated(res, rows, pagination, "Stock movement berhasil diambil");
     } catch (error) {
       next(error);
     }
@@ -152,17 +137,7 @@ class StockController {
    */
   static async getAdjustments(req, res, next) {
     try {
-      const {
-        page = 1,
-        limit = 10,
-        productId,
-        adjustmentType,
-        status,
-        startDate,
-        endDate,
-        sortBy = "adjustmentDate",
-        sortOrder = "DESC",
-      } = req.query;
+      const { page = 1, limit = 10, productId, adjustmentType, status, startDate, endDate, sortBy = "adjustmentDate", sortOrder = "DESC" } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const whereClause = {};
@@ -221,12 +196,7 @@ class StockController {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
 
-      return ApiResponse.paginated(
-        res,
-        rows,
-        pagination,
-        "Adjustment berhasil diambil"
-      );
+      return ApiResponse.paginated(res, rows, pagination, "Adjustment berhasil diambil");
     } catch (error) {
       next(error);
     }
@@ -264,11 +234,7 @@ class StockController {
         return ApiResponse.notFound(res, "Adjustment tidak ditemukan");
       }
 
-      return ApiResponse.success(
-        res,
-        adjustment,
-        "Detail adjustment berhasil diambil"
-      );
+      return ApiResponse.success(res, adjustment, "Detail adjustment berhasil diambil");
     } catch (error) {
       next(error);
     }
@@ -306,6 +272,26 @@ class StockController {
         return ApiResponse.validationError(res, errors, "Data tidak valid");
       }
 
+      if (!reason) {
+        errors.reason = ["Alasan adjustment harus diisi"];
+      } else if (reason.length > 255) {
+        // ← NEW!
+        errors.reason = ["Alasan maksimal 255 karakter"];
+      }
+
+      if (notes && notes.length > 500) {
+        // ← NEW!
+        errors.notes = ["Catatan maksimal 500 karakter"];
+      }
+
+      // Also in rejectAdjustment() method (around line 245):
+      if (!notes) {
+        return ApiResponse.error(res, "Alasan penolakan harus diisi", 422);
+      } else if (notes.length > 500) {
+        // ← NEW!
+        return ApiResponse.error(res, "Alasan penolakan maksimal 500 karakter", 422);
+      }
+
       // Check product
       const product = await Product.findByPk(productId);
       if (!product) {
@@ -314,11 +300,7 @@ class StockController {
 
       // Validate quantity for negative adjustment
       if (quantity < 0 && Math.abs(quantity) > product.stock) {
-        return ApiResponse.error(
-          res,
-          `Jumlah adjustment melebihi stok. Stok saat ini: ${product.stock}`,
-          400
-        );
+        return ApiResponse.error(res, `Jumlah adjustment melebihi stok. Stok saat ini: ${product.stock}`, 400);
       }
 
       // Create adjustment and apply to stock
@@ -347,15 +329,9 @@ class StockController {
         ],
       });
 
-      console.log(
-        `✅ Stock adjustment created: ${adjustment.adjustmentNumber} - ${adjustmentType} - ${quantity}`
-      );
+      console.log(`✅ Stock adjustment created: ${adjustment.adjustmentNumber} - ${adjustmentType} - ${quantity}`);
 
-      return ApiResponse.created(
-        res,
-        completeAdjustment,
-        "Stock adjustment berhasil dibuat"
-      );
+      return ApiResponse.created(res, completeAdjustment, "Stock adjustment berhasil dibuat");
     } catch (error) {
       console.error("❌ Error creating adjustment:", error);
       next(error);
@@ -377,13 +353,7 @@ class StockController {
       }
 
       if (adjustment.status !== "PENDING") {
-        return ApiResponse.error(
-          res,
-          `Adjustment sudah ${
-            adjustment.status === "APPROVED" ? "disetujui" : "ditolak"
-          }`,
-          400
-        );
+        return ApiResponse.error(res, `Adjustment sudah ${adjustment.status === "APPROVED" ? "disetujui" : "ditolak"}`, 400);
       }
 
       await adjustment.update({
@@ -409,11 +379,7 @@ class StockController {
 
       console.log(`✅ Adjustment approved: ${adjustment.adjustmentNumber}`);
 
-      return ApiResponse.success(
-        res,
-        updatedAdjustment,
-        "Adjustment berhasil disetujui"
-      );
+      return ApiResponse.success(res, updatedAdjustment, "Adjustment berhasil disetujui");
     } catch (error) {
       console.error("❌ Error approving adjustment:", error);
       next(error);
@@ -439,13 +405,7 @@ class StockController {
       }
 
       if (adjustment.status !== "PENDING") {
-        return ApiResponse.error(
-          res,
-          `Adjustment sudah ${
-            adjustment.status === "APPROVED" ? "disetujui" : "ditolak"
-          }`,
-          400
-        );
+        return ApiResponse.error(res, `Adjustment sudah ${adjustment.status === "APPROVED" ? "disetujui" : "ditolak"}`, 400);
       }
 
       await adjustment.update({
@@ -471,11 +431,7 @@ class StockController {
 
       console.log(`❌ Adjustment rejected: ${adjustment.adjustmentNumber}`);
 
-      return ApiResponse.success(
-        res,
-        updatedAdjustment,
-        "Adjustment berhasil ditolak"
-      );
+      return ApiResponse.success(res, updatedAdjustment, "Adjustment berhasil ditolak");
     } catch (error) {
       console.error("❌ Error rejecting adjustment:", error);
       next(error);

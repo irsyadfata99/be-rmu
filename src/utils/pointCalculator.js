@@ -1,11 +1,45 @@
 // ============================================
-// src/utils/pointCalculator.js (NEW)
-// Utility untuk menghitung point berdasarkan transaksi
+// src/utils/pointCalculator.js - FIXED VERSION
+// Point calculator dengan DECIMAL PRECISION fix
 // ============================================
 
 const Setting = require("../models/Setting");
 const Product = require("../models/Product");
 const Category = require("../models/Category");
+
+// ✅ FIX: Added Decimal.js for precise decimal calculations
+// This prevents floating point precision errors
+const Decimal = require("decimal.js");
+
+// Configure Decimal.js for financial calculations
+Decimal.set({
+  precision: 20, // High precision for calculations
+  rounding: Decimal.ROUND_HALF_UP,
+  toExpPos: 9e15,
+  toExpNeg: -9e15,
+});
+
+/**
+ * ✅ FIX: Helper function to safely convert to Decimal
+ * Prevents NaN and handles various input types
+ * @param {*} value - Value to convert
+ * @param {number} defaultValue - Default value if conversion fails
+ * @returns {Decimal}
+ */
+function toDecimal(value, defaultValue = 0) {
+  try {
+    if (value === null || value === undefined || value === "") {
+      return new Decimal(defaultValue);
+    }
+    const decimal = new Decimal(value);
+    if (decimal.isNaN()) {
+      return new Decimal(defaultValue);
+    }
+    return decimal;
+  } catch (error) {
+    return new Decimal(defaultValue);
+  }
+}
 
 /**
  * Calculate points untuk satu item produk
@@ -16,12 +50,23 @@ const Category = require("../models/Category");
  * @returns {Promise<number>} - Points earned
  */
 async function calculateItemPoints(item, mode, globalRate, rounding) {
-  let points = 0;
+  // ✅ FIX: Use Decimal for all calculations
+  let points = new Decimal(0);
+
+  // ✅ FIX: Convert all input values to Decimal
+  const subtotal = toDecimal(item.subtotal, 0);
+  const quantity = toDecimal(item.quantity, 0);
+  const rate = toDecimal(globalRate, 1000);
+
+  // Prevent division by zero
+  if (rate.equals(0)) {
+    return 0;
+  }
 
   switch (mode) {
     case "GLOBAL":
-      // Simple: subtotal / globalRate
-      points = item.subtotal / globalRate;
+      // ✅ FIX: Use Decimal division for precise calculation
+      points = subtotal.dividedBy(rate);
       break;
 
     case "PER_PRODUCT":
@@ -31,11 +76,12 @@ async function calculateItemPoints(item, mode, globalRate, rounding) {
       });
 
       if (product && product.pointsPerUnit > 0) {
-        // Points = quantity * pointsPerUnit
-        points = item.quantity * parseFloat(product.pointsPerUnit);
+        // ✅ FIX: Use Decimal multiplication
+        const pointsPerUnit = toDecimal(product.pointsPerUnit, 0);
+        points = quantity.times(pointsPerUnit);
       } else {
         // Fallback to global if product doesn't have pointsPerUnit
-        points = item.subtotal / globalRate;
+        points = subtotal.dividedBy(rate);
       }
       break;
 
@@ -53,22 +99,23 @@ async function calculateItemPoints(item, mode, globalRate, rounding) {
       });
 
       if (productWithCat && productWithCat.category) {
-        const basePoints = item.subtotal / globalRate;
-        const multiplier = parseFloat(productWithCat.category.pointsMultiplier) || 1.0;
-        points = basePoints * multiplier;
+        // ✅ FIX: Use Decimal for multiplier calculation
+        const basePoints = subtotal.dividedBy(rate);
+        const multiplier = toDecimal(productWithCat.category.pointsMultiplier, 1.0);
+        points = basePoints.times(multiplier);
       } else {
         // Fallback to global
-        points = item.subtotal / globalRate;
+        points = subtotal.dividedBy(rate);
       }
       break;
 
     default:
       // Default to GLOBAL
-      points = item.subtotal / globalRate;
+      points = subtotal.dividedBy(rate);
   }
 
-  // Apply rounding
-  return applyRounding(points, rounding);
+  // Apply rounding and convert to number
+  return applyRounding(points.toNumber(), rounding);
 }
 
 /**
@@ -78,6 +125,11 @@ async function calculateItemPoints(item, mode, globalRate, rounding) {
  * @returns {number} - Rounded points
  */
 function applyRounding(points, rounding) {
+  // ✅ FIX: Handle edge cases
+  if (isNaN(points) || !isFinite(points)) {
+    return 0;
+  }
+
   switch (rounding.toUpperCase()) {
     case "UP":
       return Math.ceil(points);
@@ -115,11 +167,17 @@ async function calculateTransactionPoints(items) {
   const rounding = (await Setting.get("point_decimal_rounding", "DOWN")).toUpperCase();
   const minTransaction = parseFloat(await Setting.get("min_transaction_for_points", 0));
 
-  // Calculate total transaction amount
-  const totalAmount = items.reduce((sum, item) => sum + parseFloat(item.subtotal), 0);
+  // ✅ FIX: Use Decimal for total amount calculation
+  let totalAmount = new Decimal(0);
+  for (const item of items) {
+    totalAmount = totalAmount.plus(toDecimal(item.subtotal, 0));
+  }
+
+  // Convert to number for comparison
+  const totalAmountNumber = totalAmount.toNumber();
 
   // Check minimum transaction
-  if (totalAmount < minTransaction) {
+  if (totalAmountNumber < minTransaction) {
     return {
       totalPoints: 0,
       itemsWithPoints: items.map((item) => ({
@@ -162,7 +220,14 @@ async function calculateTransactionPoints(items) {
  * @returns {number} - Nilai rupiah
  */
 function calculatePointValue(points, exchangeRate = 1000) {
-  return points * exchangeRate;
+  // ✅ FIX: Use Decimal for precise multiplication
+  const pointsDecimal = toDecimal(points, 0);
+  const rateDecimal = toDecimal(exchangeRate, 1000);
+
+  const value = pointsDecimal.times(rateDecimal);
+
+  // ✅ FIX: Round to 2 decimal places for currency
+  return Math.round(value.toNumber() * 100) / 100;
 }
 
 /**
@@ -172,7 +237,19 @@ function calculatePointValue(points, exchangeRate = 1000) {
  * @returns {number} - Jumlah point yang dibutuhkan
  */
 function calculatePointsNeeded(discountAmount, exchangeRate = 1000) {
-  return Math.ceil(discountAmount / exchangeRate);
+  // ✅ FIX: Use Decimal for precise division
+  const amountDecimal = toDecimal(discountAmount, 0);
+  const rateDecimal = toDecimal(exchangeRate, 1000);
+
+  // Prevent division by zero
+  if (rateDecimal.equals(0)) {
+    return 0;
+  }
+
+  const points = amountDecimal.dividedBy(rateDecimal);
+
+  // Always round up for points needed (user needs at least this much)
+  return Math.ceil(points.toNumber());
 }
 
 /**
@@ -183,23 +260,40 @@ function calculatePointsNeeded(discountAmount, exchangeRate = 1000) {
  * @returns {object} - { valid, message, discountAmount }
  */
 function validatePointRedemption(memberPoints, pointsToRedeem, transactionAmount) {
+  // ✅ FIX: Use Decimal for all validations
+  const memberPts = toDecimal(memberPoints, 0);
+  const redeemPts = toDecimal(pointsToRedeem, 0);
+  const txAmount = toDecimal(transactionAmount, 0);
+
   // Check if member has enough points
-  if (pointsToRedeem > memberPoints) {
+  if (redeemPts.greaterThan(memberPts)) {
     return {
       valid: false,
-      message: `Point tidak cukup. Tersedia: ${memberPoints}, Diminta: ${pointsToRedeem}`,
+      message: `Point tidak cukup. Tersedia: ${memberPts.toNumber()}, Diminta: ${redeemPts.toNumber()}`,
       discountAmount: 0,
     };
   }
 
   // Calculate discount amount
-  const discountAmount = calculatePointValue(pointsToRedeem);
+  const discountAmount = calculatePointValue(redeemPts.toNumber());
+  const discountDecimal = toDecimal(discountAmount, 0);
 
   // Check if discount doesn't exceed transaction amount
-  if (discountAmount > transactionAmount) {
+  if (discountDecimal.greaterThan(txAmount)) {
+    const maxPoints = calculatePointsNeeded(txAmount.toNumber());
     return {
       valid: false,
-      message: `Discount melebihi total transaksi. Max point: ${calculatePointsNeeded(transactionAmount)}`,
+      message: `Discount melebihi total transaksi. Max point: ${maxPoints}`,
+      discountAmount: 0,
+      maxPointsAllowed: maxPoints,
+    };
+  }
+
+  // ✅ FIX: Check for negative or zero values
+  if (redeemPts.lessThanOrEqualTo(0)) {
+    return {
+      valid: false,
+      message: "Point yang ditukar harus lebih dari 0",
       discountAmount: 0,
     };
   }
@@ -208,6 +302,8 @@ function validatePointRedemption(memberPoints, pointsToRedeem, transactionAmount
     valid: true,
     message: "Point redemption valid",
     discountAmount,
+    remainingPoints: memberPts.minus(redeemPts).toNumber(),
+    finalAmount: txAmount.minus(discountDecimal).toNumber(),
   };
 }
 
@@ -237,6 +333,94 @@ async function getPointPreview(items) {
   };
 }
 
+/**
+ * ✅ FIX: Added function to validate point calculation inputs
+ * @param {array} items - Items to validate
+ * @returns {object} - { valid, errors }
+ */
+function validatePointCalculationInputs(items) {
+  const errors = [];
+
+  if (!Array.isArray(items)) {
+    errors.push("Items harus berupa array");
+    return { valid: false, errors };
+  }
+
+  if (items.length === 0) {
+    errors.push("Items tidak boleh kosong");
+    return { valid: false, errors };
+  }
+
+  items.forEach((item, index) => {
+    if (!item.productId) {
+      errors.push(`Item ${index + 1}: productId harus diisi`);
+    }
+
+    if (!item.subtotal || item.subtotal < 0) {
+      errors.push(`Item ${index + 1}: subtotal tidak valid`);
+    }
+
+    if (!item.quantity || item.quantity <= 0) {
+      errors.push(`Item ${index + 1}: quantity harus lebih dari 0`);
+    }
+  });
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}
+
+/**
+ * ✅ FIX: Added function to calculate point statistics
+ * @param {array} transactions - Array of transactions with points
+ * @returns {object} - Statistics
+ */
+function calculatePointStatistics(transactions) {
+  let totalPointsEarned = new Decimal(0);
+  let totalPointsRedeemed = new Decimal(0);
+  let totalPointsExpired = new Decimal(0);
+
+  for (const tx of transactions) {
+    const points = toDecimal(tx.points, 0);
+
+    switch (tx.type) {
+      case "EARN":
+        totalPointsEarned = totalPointsEarned.plus(points);
+        break;
+      case "REDEEM":
+        totalPointsRedeemed = totalPointsRedeemed.plus(points.abs());
+        break;
+      case "EXPIRED":
+        totalPointsExpired = totalPointsExpired.plus(points.abs());
+        break;
+    }
+  }
+
+  return {
+    totalPointsEarned: totalPointsEarned.toNumber(),
+    totalPointsRedeemed: totalPointsRedeemed.toNumber(),
+    totalPointsExpired: totalPointsExpired.toNumber(),
+    netPoints: totalPointsEarned.minus(totalPointsRedeemed).minus(totalPointsExpired).toNumber(),
+  };
+}
+
+/**
+ * ✅ FIX: Added function to format points for display
+ * @param {number} points - Points to format
+ * @param {boolean} showDecimals - Whether to show decimal places
+ * @returns {string} - Formatted string
+ */
+function formatPoints(points, showDecimals = false) {
+  const pointsDecimal = toDecimal(points, 0);
+
+  if (showDecimals) {
+    return pointsDecimal.toFixed(2);
+  }
+
+  return Math.floor(pointsDecimal.toNumber()).toLocaleString("id-ID");
+}
+
 module.exports = {
   calculateTransactionPoints,
   calculateItemPoints,
@@ -245,4 +429,8 @@ module.exports = {
   validatePointRedemption,
   getPointPreview,
   applyRounding,
+  validatePointCalculationInputs,
+  calculatePointStatistics,
+  formatPoints,
+  toDecimal, // Export for testing purposes
 };

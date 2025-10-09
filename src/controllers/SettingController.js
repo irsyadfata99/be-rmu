@@ -1,6 +1,7 @@
 // ============================================
 // src/controllers/SettingController.js
 // Controller untuk manage settings aplikasi
+// ✅ FIXED: No variable redeclaration + max length validation
 // ============================================
 const Setting = require("../models/Setting");
 const ApiResponse = require("../utils/response");
@@ -103,17 +104,19 @@ class SettingController {
         return ApiResponse.error(res, "Value harus diisi", 422);
       }
 
+      // Convert value to string
+      const valueString = typeof value === "object" ? JSON.stringify(value) : String(value);
+
+      // ✅ NEW: Max length validation
+      if (valueString.length > 1000) {
+        return ApiResponse.error(res, "Value maksimal 1000 karakter", 422);
+      }
+
       const setting = await Setting.findOne({ where: { key } });
 
       if (!setting) {
         // Create new setting if not exists
-        const newSetting = await Setting.set(
-          key,
-          value,
-          type || "TEXT",
-          group || "GENERAL",
-          description
-        );
+        const newSetting = await Setting.set(key, value, type || "TEXT", group || "GENERAL", description);
 
         return ApiResponse.created(
           res,
@@ -129,11 +132,8 @@ class SettingController {
       }
 
       // Update existing setting
-      const stringValue =
-        typeof value === "object" ? JSON.stringify(value) : String(value);
-
       await setting.update({
-        value: stringValue,
+        value: valueString,
         ...(type && { type }),
         ...(group && { group }),
         ...(description !== undefined && { description }),
@@ -177,13 +177,20 @@ class SettingController {
         }
 
         try {
-          const setting = await Setting.set(
-            key,
-            value,
-            type || "TEXT",
-            group || "GENERAL",
-            description
-          );
+          // Convert value to string for validation
+          const bulkValueString = typeof value === "object" ? JSON.stringify(value) : String(value);
+
+          // ✅ NEW: Max length validation
+          if (bulkValueString.length > 1000) {
+            results.push({
+              key,
+              error: "Value maksimal 1000 karakter",
+              success: false,
+            });
+            continue;
+          }
+
+          const setting = await Setting.set(key, value, type || "TEXT", group || "GENERAL", description);
 
           results.push({
             key: setting.key,
@@ -219,11 +226,7 @@ class SettingController {
         ],
       });
 
-      return ApiResponse.success(
-        res,
-        settings,
-        "Default settings berhasil diinisialisasi"
-      );
+      return ApiResponse.success(res, settings, "Default settings berhasil diinisialisasi");
     } catch (error) {
       next(error);
     }

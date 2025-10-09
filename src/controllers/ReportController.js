@@ -1,26 +1,9 @@
 // ============================================
 // src/controllers/ReportController.js
 // Controller untuk semua laporan
+// ✅ FIXED: N+1 query dengan subquery untuk lastPayment
 // ============================================
-const {
-  Sale,
-  SaleItem,
-  Purchase,
-  PurchaseItem,
-  PurchaseReturn,
-  PurchaseReturnItem,
-  SalesReturn,
-  SalesReturnItem,
-  MemberDebt,
-  DebtPayment,
-  SupplierDebt,
-  Member,
-  Product,
-  Category,
-  Supplier,
-  User,
-  PointTransaction,
-} = require("../models"); // ← Satu-satunya import models!
+const { Sale, SaleItem, Purchase, PurchaseItem, PurchaseReturn, PurchaseReturnItem, SalesReturn, SalesReturnItem, MemberDebt, DebtPayment, SupplierDebt, Member, Product, Category, Supplier, User, PointTransaction } = require("../models");
 
 const ApiResponse = require("../utils/response");
 const ExcelExporter = require("../utils/excelExporter");
@@ -34,16 +17,7 @@ class ReportController {
   // ============================================
   static async getReturns(req, res, next) {
     try {
-      const {
-        page = 1,
-        limit = 50,
-        type,
-        status,
-        startDate,
-        endDate,
-        search = "",
-        export: exportExcel = false,
-      } = req.query;
+      const { page = 1, limit = 50, type, status, startDate, endDate, search = "", export: exportExcel = false } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       let data = [];
@@ -176,23 +150,10 @@ class ReportController {
           reason: item.reason,
         }));
 
-        const buffer = await ExcelExporter.exportToExcel(
-          excelData,
-          columns,
-          "Laporan Return",
-          "LAPORAN BARANG RETURN"
-        );
+        const buffer = await ExcelExporter.exportToExcel(excelData, columns, "Laporan Return", "LAPORAN BARANG RETURN");
 
-        res.setHeader(
-          "Content-Type",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        );
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename=${ExcelExporter.generateFilename(
-            "Laporan_Return"
-          )}`
-        );
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename=${ExcelExporter.generateFilename("Laporan_Return")}`);
         return res.send(buffer);
       }
 
@@ -203,12 +164,7 @@ class ReportController {
         totalPages: Math.ceil(total / parseInt(limit)),
       };
 
-      return ApiResponse.paginated(
-        res,
-        data,
-        pagination,
-        "Laporan return berhasil diambil"
-      );
+      return ApiResponse.paginated(res, data, pagination, "Laporan return berhasil diambil");
     } catch (error) {
       next(error);
     }
@@ -219,13 +175,7 @@ class ReportController {
   // ============================================
   static async getBestSelling(req, res, next) {
     try {
-      const {
-        startDate,
-        endDate,
-        categoryId,
-        limit = 50,
-        export: exportExcel = false,
-      } = req.query;
+      const { startDate, endDate, categoryId, limit = 50, export: exportExcel = false } = req.query;
 
       const whereClause = {};
 
@@ -243,10 +193,7 @@ class ReportController {
         attributes: [
           "productId",
           [sequelize.fn("SUM", sequelize.col("quantity")), "totalQuantity"],
-          [
-            sequelize.fn("COUNT", sequelize.col("sale_items.id")),
-            "totalTransactions",
-          ],
+          [sequelize.fn("COUNT", sequelize.col("sale_items.id")), "totalTransactions"],
           [sequelize.fn("SUM", sequelize.col("subtotal")), "totalRevenue"],
         ],
         where: whereClause,
@@ -255,9 +202,7 @@ class ReportController {
             model: Product,
             as: "product",
             attributes: ["sku", "name", "unit", "sellingPrice"],
-            include: [
-              { model: Category, as: "category", attributes: ["name"] },
-            ],
+            include: [{ model: Category, as: "category", attributes: ["name"] }],
           },
           {
             model: Sale,
@@ -289,11 +234,7 @@ class ReportController {
         totalQuantity: parseInt(item.dataValues.totalQuantity),
         totalTransactions: parseInt(item.dataValues.totalTransactions),
         totalRevenue: parseFloat(item.dataValues.totalRevenue || 0),
-        avgPerTransaction: parseFloat(
-          (
-            item.dataValues.totalQuantity / item.dataValues.totalTransactions
-          ).toFixed(2)
-        ),
+        avgPerTransaction: parseFloat((item.dataValues.totalQuantity / item.dataValues.totalTransactions).toFixed(2)),
       }));
 
       if (exportExcel === "true") {
@@ -310,31 +251,14 @@ class ReportController {
           { header: "Avg/Transaksi", key: "avgPerTransaction", width: 15 },
         ];
 
-        const buffer = await ExcelExporter.exportToExcel(
-          data,
-          columns,
-          "Barang Paling Laku",
-          "LAPORAN BARANG PALING LAKU"
-        );
+        const buffer = await ExcelExporter.exportToExcel(data, columns, "Barang Paling Laku", "LAPORAN BARANG PALING LAKU");
 
-        res.setHeader(
-          "Content-Type",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        );
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename=${ExcelExporter.generateFilename(
-            "Laporan_Barang_Paling_Laku"
-          )}`
-        );
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename=${ExcelExporter.generateFilename("Laporan_Barang_Paling_Laku")}`);
         return res.send(buffer);
       }
 
-      return ApiResponse.success(
-        res,
-        data,
-        "Laporan barang paling laku berhasil diambil"
-      );
+      return ApiResponse.success(res, data, "Laporan barang paling laku berhasil diambil");
     } catch (error) {
       next(error);
     }
@@ -360,42 +284,10 @@ class ReportController {
           [sequelize.fn("DATE", sequelize.col("sale_date")), "date"],
           [sequelize.fn("COUNT", sequelize.col("id")), "totalTransactions"],
           [sequelize.fn("SUM", sequelize.col("final_amount")), "totalRevenue"],
-          [
-            sequelize.fn(
-              "SUM",
-              sequelize.literal(
-                "CASE WHEN sale_type = 'TUNAI' THEN 1 ELSE 0 END"
-              )
-            ),
-            "tunaiCount",
-          ],
-          [
-            sequelize.fn(
-              "SUM",
-              sequelize.literal(
-                "CASE WHEN sale_type = 'KREDIT' THEN 1 ELSE 0 END"
-              )
-            ),
-            "kreditCount",
-          ],
-          [
-            sequelize.fn(
-              "SUM",
-              sequelize.literal(
-                "CASE WHEN sale_type = 'TUNAI' THEN final_amount ELSE 0 END"
-              )
-            ),
-            "tunaiRevenue",
-          ],
-          [
-            sequelize.fn(
-              "SUM",
-              sequelize.literal(
-                "CASE WHEN sale_type = 'KREDIT' THEN final_amount ELSE 0 END"
-              )
-            ),
-            "kreditRevenue",
-          ],
+          [sequelize.fn("SUM", sequelize.literal("CASE WHEN sale_type = 'TUNAI' THEN 1 ELSE 0 END")), "tunaiCount"],
+          [sequelize.fn("SUM", sequelize.literal("CASE WHEN sale_type = 'KREDIT' THEN 1 ELSE 0 END")), "kreditCount"],
+          [sequelize.fn("SUM", sequelize.literal("CASE WHEN sale_type = 'TUNAI' THEN final_amount ELSE 0 END")), "tunaiRevenue"],
+          [sequelize.fn("SUM", sequelize.literal("CASE WHEN sale_type = 'KREDIT' THEN final_amount ELSE 0 END")), "kreditRevenue"],
         ],
         where: whereClause,
         group: [sequelize.fn("DATE", sequelize.col("sale_date"))],
@@ -412,9 +304,7 @@ class ReportController {
         tunaiRevenue: parseFloat(item.tunaiRevenue || 0),
         kreditCount: parseInt(item.kreditCount),
         kreditRevenue: parseFloat(item.kreditRevenue || 0),
-        avgPerTransaction: parseFloat(
-          (item.totalRevenue / item.totalTransactions).toFixed(2)
-        ),
+        avgPerTransaction: parseFloat((item.totalRevenue / item.totalTransactions).toFixed(2)),
       }));
 
       if (exportExcel === "true") {
@@ -430,31 +320,14 @@ class ReportController {
           { header: "Avg/Transaksi", key: "avgPerTransaction", width: 15 },
         ];
 
-        const buffer = await ExcelExporter.exportToExcel(
-          data,
-          columns,
-          "Transaksi Harian",
-          "LAPORAN TRANSAKSI HARIAN"
-        );
+        const buffer = await ExcelExporter.exportToExcel(data, columns, "Transaksi Harian", "LAPORAN TRANSAKSI HARIAN");
 
-        res.setHeader(
-          "Content-Type",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        );
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename=${ExcelExporter.generateFilename(
-            "Laporan_Transaksi_Harian"
-          )}`
-        );
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename=${ExcelExporter.generateFilename("Laporan_Transaksi_Harian")}`);
         return res.send(buffer);
       }
 
-      return ApiResponse.success(
-        res,
-        data,
-        "Laporan transaksi harian berhasil diambil"
-      );
+      return ApiResponse.success(res, data, "Laporan transaksi harian berhasil diambil");
     } catch (error) {
       next(error);
     }
@@ -465,8 +338,7 @@ class ReportController {
   // ============================================
   static async getMonthlyTransactions(req, res, next) {
     try {
-      const { year = new Date().getFullYear(), export: exportExcel = false } =
-        req.query;
+      const { year = new Date().getFullYear(), export: exportExcel = false } = req.query;
 
       const monthlyData = await Sale.findAll({
         attributes: [
@@ -474,37 +346,15 @@ class ReportController {
           [sequelize.fn("YEAR", sequelize.col("sale_date")), "year"],
           [sequelize.fn("COUNT", sequelize.col("id")), "totalTransactions"],
           [sequelize.fn("SUM", sequelize.col("final_amount")), "totalRevenue"],
-          [
-            sequelize.fn(
-              "SUM",
-              sequelize.literal(
-                "CASE WHEN sale_type = 'TUNAI' THEN 1 ELSE 0 END"
-              )
-            ),
-            "tunaiCount",
-          ],
-          [
-            sequelize.fn(
-              "SUM",
-              sequelize.literal(
-                "CASE WHEN sale_type = 'KREDIT' THEN 1 ELSE 0 END"
-              )
-            ),
-            "kreditCount",
-          ],
+          [sequelize.fn("SUM", sequelize.literal("CASE WHEN sale_type = 'TUNAI' THEN 1 ELSE 0 END")), "tunaiCount"],
+          [sequelize.fn("SUM", sequelize.literal("CASE WHEN sale_type = 'KREDIT' THEN 1 ELSE 0 END")), "kreditCount"],
         ],
         where: {
           saleDate: {
-            [Op.between]: [
-              new Date(`${year}-01-01`),
-              new Date(`${year}-12-31 23:59:59`),
-            ],
+            [Op.between]: [new Date(`${year}-01-01`), new Date(`${year}-12-31 23:59:59`)],
           },
         },
-        group: [
-          sequelize.fn("MONTH", sequelize.col("sale_date")),
-          sequelize.fn("YEAR", sequelize.col("sale_date")),
-        ],
+        group: [sequelize.fn("MONTH", sequelize.col("sale_date")), sequelize.fn("YEAR", sequelize.col("sale_date"))],
         order: [
           [sequelize.fn("YEAR", sequelize.col("sale_date")), "ASC"],
           [sequelize.fn("MONTH", sequelize.col("sale_date")), "ASC"],
@@ -512,20 +362,7 @@ class ReportController {
         raw: true,
       });
 
-      const monthNames = [
-        "Januari",
-        "Februari",
-        "Maret",
-        "April",
-        "Mei",
-        "Juni",
-        "Juli",
-        "Agustus",
-        "September",
-        "Oktober",
-        "November",
-        "Desember",
-      ];
+      const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
       const data = monthlyData.map((item) => ({
         month: parseInt(item.month),
@@ -535,9 +372,7 @@ class ReportController {
         totalRevenue: parseFloat(item.totalRevenue || 0),
         tunaiCount: parseInt(item.tunaiCount),
         kreditCount: parseInt(item.kreditCount),
-        avgPerTransaction: parseFloat(
-          (item.totalRevenue / item.totalTransactions).toFixed(2)
-        ),
+        avgPerTransaction: parseFloat((item.totalRevenue / item.totalTransactions).toFixed(2)),
       }));
 
       if (exportExcel === "true") {
@@ -551,31 +386,14 @@ class ReportController {
           { header: "Avg/Transaksi", key: "avgPerTransaction", width: 15 },
         ];
 
-        const buffer = await ExcelExporter.exportToExcel(
-          data,
-          columns,
-          "Transaksi Bulanan",
-          `LAPORAN TRANSAKSI BULANAN - ${year}`
-        );
+        const buffer = await ExcelExporter.exportToExcel(data, columns, "Transaksi Bulanan", `LAPORAN TRANSAKSI BULANAN - ${year}`);
 
-        res.setHeader(
-          "Content-Type",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        );
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename=${ExcelExporter.generateFilename(
-            "Laporan_Transaksi_Bulanan"
-          )}`
-        );
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename=${ExcelExporter.generateFilename("Laporan_Transaksi_Bulanan")}`);
         return res.send(buffer);
       }
 
-      return ApiResponse.success(
-        res,
-        data,
-        "Laporan transaksi bulanan berhasil diambil"
-      );
+      return ApiResponse.success(res, data, "Laporan transaksi bulanan berhasil diambil");
     } catch (error) {
       next(error);
     }
@@ -586,16 +404,7 @@ class ReportController {
   // ============================================
   static async getMemberTransactions(req, res, next) {
     try {
-      const {
-        page = 1,
-        limit = 50,
-        regionCode,
-        startDate,
-        endDate,
-        sortBy = "totalSpending",
-        sortOrder = "DESC",
-        export: exportExcel = false,
-      } = req.query;
+      const { page = 1, limit = 50, regionCode, startDate, endDate, sortBy = "totalSpending", sortOrder = "DESC", export: exportExcel = false } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const whereClause = {};
@@ -606,30 +415,14 @@ class ReportController {
 
       const memberData = await Member.findAndCountAll({
         where: whereClause,
-        attributes: [
-          "id",
-          "uniqueId",
-          "fullName",
-          "regionCode",
-          "regionName",
-          "whatsapp",
-          "totalDebt",
-          "totalPoints",
-          "isActive",
-        ],
+        attributes: ["id", "uniqueId", "fullName", "regionCode", "regionName", "whatsapp", "totalDebt", "totalPoints", "isActive"],
         include: [
           {
             model: Sale,
             as: "sales",
             attributes: [
-              [
-                sequelize.fn("COUNT", sequelize.col("sales.id")),
-                "transactionCount",
-              ],
-              [
-                sequelize.fn("SUM", sequelize.col("sales.final_amount")),
-                "totalSpending",
-              ],
+              [sequelize.fn("COUNT", sequelize.col("sales.id")), "transactionCount"],
+              [sequelize.fn("SUM", sequelize.col("sales.final_amount")), "totalSpending"],
             ],
             where:
               startDate && endDate
@@ -655,21 +448,11 @@ class ReportController {
         regionName: member.regionName,
         whatsapp: member.whatsapp,
         totalTransactions: member.sales?.[0]?.dataValues?.transactionCount || 0,
-        totalSpending: parseFloat(
-          member.sales?.[0]?.dataValues?.totalSpending || 0
-        ),
+        totalSpending: parseFloat(member.sales?.[0]?.dataValues?.totalSpending || 0),
         totalDebt: parseFloat(member.totalDebt),
         totalPoints: member.totalPoints,
         isActive: member.isActive ? "Aktif" : "Nonaktif",
-        avgPerTransaction:
-          member.sales?.[0]?.dataValues?.transactionCount > 0
-            ? parseFloat(
-                (
-                  member.sales[0].dataValues.totalSpending /
-                  member.sales[0].dataValues.transactionCount
-                ).toFixed(2)
-              )
-            : 0,
+        avgPerTransaction: member.sales?.[0]?.dataValues?.transactionCount > 0 ? parseFloat((member.sales[0].dataValues.totalSpending / member.sales[0].dataValues.transactionCount).toFixed(2)) : 0,
       }));
 
       data.sort((a, b) => {
@@ -693,23 +476,10 @@ class ReportController {
           { header: "Status", key: "isActive", width: 12 },
         ];
 
-        const buffer = await ExcelExporter.exportToExcel(
-          data,
-          columns,
-          "Transaksi per Member",
-          "LAPORAN TRANSAKSI PER MEMBER"
-        );
+        const buffer = await ExcelExporter.exportToExcel(data, columns, "Transaksi per Member", "LAPORAN TRANSAKSI PER MEMBER");
 
-        res.setHeader(
-          "Content-Type",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        );
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename=${ExcelExporter.generateFilename(
-            "Laporan_Transaksi_Member"
-          )}`
-        );
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename=${ExcelExporter.generateFilename("Laporan_Transaksi_Member")}`);
         return res.send(buffer);
       }
 
@@ -720,12 +490,7 @@ class ReportController {
         totalPages: Math.ceil(memberData.count.length / parseInt(limit)),
       };
 
-      return ApiResponse.paginated(
-        res,
-        data,
-        pagination,
-        "Laporan transaksi per member berhasil diambil"
-      );
+      return ApiResponse.paginated(res, data, pagination, "Laporan transaksi per member berhasil diambil");
     } catch (error) {
       next(error);
     }
@@ -736,15 +501,7 @@ class ReportController {
   // ============================================
   static async getPurchaseReport(req, res, next) {
     try {
-      const {
-        page = 1,
-        limit = 50,
-        startDate,
-        endDate,
-        purchaseType,
-        supplierId,
-        export: exportExcel = false,
-      } = req.query;
+      const { page = 1, limit = 50, startDate, endDate, purchaseType, supplierId, export: exportExcel = false } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const whereClause = {};
@@ -792,9 +549,7 @@ class ReportController {
         paidAmount: parseFloat(purchase.paidAmount),
         remainingDebt: parseFloat(purchase.remainingDebt),
         status: purchase.status,
-        dueDate: purchase.dueDate
-          ? moment(purchase.dueDate).format("DD/MM/YYYY")
-          : "-",
+        dueDate: purchase.dueDate ? moment(purchase.dueDate).format("DD/MM/YYYY") : "-",
         inputBy: purchase.user?.name || "-",
       }));
 
@@ -813,23 +568,10 @@ class ReportController {
           { header: "Input By", key: "inputBy", width: 20 },
         ];
 
-        const buffer = await ExcelExporter.exportToExcel(
-          data,
-          columns,
-          "Jenis Pembelian",
-          "LAPORAN JENIS PEMBELIAN"
-        );
+        const buffer = await ExcelExporter.exportToExcel(data, columns, "Jenis Pembelian", "LAPORAN JENIS PEMBELIAN");
 
-        res.setHeader(
-          "Content-Type",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        );
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename=${ExcelExporter.generateFilename(
-            "Laporan_Jenis_Pembelian"
-          )}`
-        );
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename=${ExcelExporter.generateFilename("Laporan_Jenis_Pembelian")}`);
         return res.send(buffer);
       }
 
@@ -840,12 +582,7 @@ class ReportController {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
 
-      return ApiResponse.paginated(
-        res,
-        data,
-        pagination,
-        "Laporan jenis pembelian berhasil diambil"
-      );
+      return ApiResponse.paginated(res, data, pagination, "Laporan jenis pembelian berhasil diambil");
     } catch (error) {
       next(error);
     }
@@ -856,14 +593,7 @@ class ReportController {
   // ============================================
   static async getDebtReport(req, res, next) {
     try {
-      const {
-        page = 1,
-        limit = 50,
-        status,
-        overdue = false,
-        supplierId,
-        export: exportExcel = false,
-      } = req.query;
+      const { page = 1, limit = 50, status, overdue = false, supplierId, export: exportExcel = false } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const whereClause = {};
@@ -905,15 +635,8 @@ class ReportController {
       });
 
       const data = rows.map((debt) => {
-        const isOverdue =
-          debt.dueDate &&
-          new Date() > new Date(debt.dueDate) &&
-          debt.status !== "PAID";
-        const daysOverdue = isOverdue
-          ? Math.ceil(
-              (new Date() - new Date(debt.dueDate)) / (1000 * 60 * 60 * 24)
-            )
-          : 0;
+        const isOverdue = debt.dueDate && new Date() > new Date(debt.dueDate) && debt.status !== "PAID";
+        const daysOverdue = isOverdue ? Math.ceil((new Date() - new Date(debt.dueDate)) / (1000 * 60 * 60 * 24)) : 0;
 
         return {
           invoiceNumber: debt.invoiceNumber,
@@ -921,21 +644,15 @@ class ReportController {
           supplierName: debt.supplier?.name || "-",
           contactPerson: debt.supplier?.contactPerson || "-",
           phone: debt.supplier?.phone || "-",
-          purchaseDate: moment(debt.purchase?.purchaseDate).format(
-            "DD/MM/YYYY"
-          ),
+          purchaseDate: moment(debt.purchase?.purchaseDate).format("DD/MM/YYYY"),
           totalAmount: parseFloat(debt.totalAmount),
           paidAmount: parseFloat(debt.paidAmount),
           remainingAmount: parseFloat(debt.remainingAmount),
-          dueDate: debt.dueDate
-            ? moment(debt.dueDate).format("DD/MM/YYYY")
-            : "-",
+          dueDate: debt.dueDate ? moment(debt.dueDate).format("DD/MM/YYYY") : "-",
           status: debt.status,
           isOverdue: isOverdue ? "YA" : "TIDAK",
           daysOverdue: daysOverdue,
-          paymentProgress: parseFloat(
-            ((debt.paidAmount / debt.totalAmount) * 100).toFixed(2)
-          ),
+          paymentProgress: parseFloat(((debt.paidAmount / debt.totalAmount) * 100).toFixed(2)),
         };
       });
 
@@ -957,23 +674,10 @@ class ReportController {
           { header: "Progress (%)", key: "paymentProgress", width: 12 },
         ];
 
-        const buffer = await ExcelExporter.exportToExcel(
-          data,
-          columns,
-          "Hutang ke Supplier",
-          "LAPORAN HUTANG KOPERASI KE SUPPLIER"
-        );
+        const buffer = await ExcelExporter.exportToExcel(data, columns, "Hutang ke Supplier", "LAPORAN HUTANG KOPERASI KE SUPPLIER");
 
-        res.setHeader(
-          "Content-Type",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        );
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename=${ExcelExporter.generateFilename(
-            "Laporan_Hutang_Supplier"
-          )}`
-        );
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename=${ExcelExporter.generateFilename("Laporan_Hutang_Supplier")}`);
         return res.send(buffer);
       }
 
@@ -984,12 +688,7 @@ class ReportController {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
 
-      return ApiResponse.paginated(
-        res,
-        data,
-        pagination,
-        "Laporan hutang berhasil diambil"
-      );
+      return ApiResponse.paginated(res, data, pagination, "Laporan hutang berhasil diambil");
     } catch (error) {
       next(error);
     }
@@ -997,18 +696,11 @@ class ReportController {
 
   // ============================================
   // 8. LAPORAN PIUTANG (Piutang dari Member)
+  // ✅ FIXED: N+1 query dengan subquery
   // ============================================
   static async getReceivableReport(req, res, next) {
     try {
-      const {
-        page = 1,
-        limit = 50,
-        status,
-        overdue = false,
-        memberId,
-        regionCode,
-        export: exportExcel = false,
-      } = req.query;
+      const { page = 1, limit = 50, status, overdue = false, memberId, regionCode, export: exportExcel = false } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const whereClause = {};
@@ -1035,8 +727,34 @@ class ReportController {
         memberWhereClause.regionCode = regionCode;
       }
 
+      // ✅ FIX: Use subquery instead of separate: true to avoid N+1
       const { count, rows } = await MemberDebt.findAndCountAll({
         where: whereClause,
+        attributes: [
+          "*",
+          // ✅ Subquery for last payment date
+          [
+            sequelize.literal(`(
+              SELECT payment_date 
+              FROM debt_payments 
+              WHERE debt_payments.member_debt_id = MemberDebt.id 
+              ORDER BY payment_date DESC 
+              LIMIT 1
+            )`),
+            "lastPaymentDate",
+          ],
+          // ✅ Subquery for last payment amount
+          [
+            sequelize.literal(`(
+              SELECT amount 
+              FROM debt_payments 
+              WHERE debt_payments.member_debt_id = MemberDebt.id 
+              ORDER BY payment_date DESC 
+              LIMIT 1
+            )`),
+            "lastPaymentAmount",
+          ],
+        ],
         limit: exportExcel === "true" ? undefined : parseInt(limit),
         offset: exportExcel === "true" ? undefined : offset,
         order: [["dueDate", "ASC"]],
@@ -1044,14 +762,7 @@ class ReportController {
           {
             model: Member,
             as: "member",
-            attributes: [
-              "uniqueId",
-              "fullName",
-              "whatsapp",
-              "regionCode",
-              "regionName",
-              "address",
-            ],
+            attributes: ["uniqueId", "fullName", "whatsapp", "regionCode", "regionName", "address"],
             where: memberWhereClause,
           },
           {
@@ -1059,28 +770,17 @@ class ReportController {
             as: "sale",
             attributes: ["saleDate"],
           },
-          {
-            model: DebtPayment,
-            as: "payments",
-            attributes: ["paymentDate", "amount"],
-            separate: true,
-            order: [["paymentDate", "DESC"]],
-            limit: 1,
-          },
+          // ✅ REMOVED: payments include (was causing N+1)
         ],
       });
 
       const data = rows.map((debt) => {
-        const isOverdue =
-          debt.dueDate &&
-          new Date() > new Date(debt.dueDate) &&
-          debt.status !== "PAID";
-        const daysOverdue = isOverdue
-          ? Math.ceil(
-              (new Date() - new Date(debt.dueDate)) / (1000 * 60 * 60 * 24)
-            )
-          : 0;
-        const lastPayment = debt.payments?.[0];
+        const isOverdue = debt.dueDate && new Date() > new Date(debt.dueDate) && debt.status !== "PAID";
+        const daysOverdue = isOverdue ? Math.ceil((new Date() - new Date(debt.dueDate)) / (1000 * 60 * 60 * 24)) : 0;
+
+        // ✅ FIX: Get last payment from subquery results
+        const lastPaymentDate = debt.dataValues.lastPaymentDate;
+        const lastPaymentAmount = debt.dataValues.lastPaymentAmount;
 
         return {
           invoiceNumber: debt.invoiceNumber,
@@ -1094,19 +794,13 @@ class ReportController {
           totalAmount: parseFloat(debt.totalAmount),
           paidAmount: parseFloat(debt.paidAmount),
           remainingAmount: parseFloat(debt.remainingAmount),
-          dueDate: debt.dueDate
-            ? moment(debt.dueDate).format("DD/MM/YYYY")
-            : "-",
+          dueDate: debt.dueDate ? moment(debt.dueDate).format("DD/MM/YYYY") : "-",
           status: debt.status,
           isOverdue: isOverdue ? "YA" : "TIDAK",
           daysOverdue: daysOverdue,
-          lastPaymentDate: lastPayment
-            ? moment(lastPayment.paymentDate).format("DD/MM/YYYY")
-            : "-",
-          lastPaymentAmount: lastPayment ? parseFloat(lastPayment.amount) : 0,
-          paymentProgress: parseFloat(
-            ((debt.paidAmount / debt.totalAmount) * 100).toFixed(2)
-          ),
+          lastPaymentDate: lastPaymentDate ? moment(lastPaymentDate).format("DD/MM/YYYY") : "-",
+          lastPaymentAmount: lastPaymentAmount ? parseFloat(lastPaymentAmount) : 0,
+          paymentProgress: parseFloat(((debt.paidAmount / debt.totalAmount) * 100).toFixed(2)),
         };
       });
 
@@ -1130,23 +824,10 @@ class ReportController {
           { header: "Progress (%)", key: "paymentProgress", width: 12 },
         ];
 
-        const buffer = await ExcelExporter.exportToExcel(
-          data,
-          columns,
-          "Piutang dari Member",
-          "LAPORAN PIUTANG KOPERASI DARI MEMBER"
-        );
+        const buffer = await ExcelExporter.exportToExcel(data, columns, "Piutang dari Member", "LAPORAN PIUTANG KOPERASI DARI MEMBER");
 
-        res.setHeader(
-          "Content-Type",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        );
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename=${ExcelExporter.generateFilename(
-            "Laporan_Piutang_Member"
-          )}`
-        );
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename=${ExcelExporter.generateFilename("Laporan_Piutang_Member")}`);
         return res.send(buffer);
       }
 
@@ -1157,12 +838,7 @@ class ReportController {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
 
-      return ApiResponse.paginated(
-        res,
-        data,
-        pagination,
-        "Laporan piutang berhasil diambil"
-      );
+      return ApiResponse.paginated(res, data, pagination, "Laporan piutang berhasil diambil");
     } catch (error) {
       next(error);
     }
@@ -1173,16 +849,7 @@ class ReportController {
   // ============================================
   static async getPointReport(req, res, next) {
     try {
-      const {
-        page = 1,
-        limit = 50,
-        memberId,
-        regionCode,
-        type,
-        startDate,
-        endDate,
-        export: exportExcel = false,
-      } = req.query;
+      const { page = 1, limit = 50, memberId, regionCode, type, startDate, endDate, export: exportExcel = false } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const whereClause = {};
@@ -1215,13 +882,7 @@ class ReportController {
           {
             model: Member,
             as: "member",
-            attributes: [
-              "uniqueId",
-              "fullName",
-              "regionCode",
-              "regionName",
-              "totalPoints",
-            ],
+            attributes: ["uniqueId", "fullName", "regionCode", "regionName", "totalPoints"],
             where: memberWhereClause,
           },
           {
@@ -1234,11 +895,7 @@ class ReportController {
       });
 
       const data = rows.map((point) => {
-        const daysUntilExpiry = point.expiryDate
-          ? Math.ceil(
-              (new Date(point.expiryDate) - new Date()) / (1000 * 60 * 60 * 24)
-            )
-          : null;
+        const daysUntilExpiry = point.expiryDate ? Math.ceil((new Date(point.expiryDate) - new Date()) / (1000 * 60 * 60 * 24)) : null;
 
         return {
           transactionDate: moment(point.createdAt).format("DD/MM/YYYY HH:mm"),
@@ -1252,18 +909,9 @@ class ReportController {
           currentPoints: point.member?.totalPoints || 0,
           description: point.description,
           invoiceNumber: point.sale?.invoiceNumber || "-",
-          transactionAmount: point.sale
-            ? parseFloat(point.sale.finalAmount)
-            : 0,
-          expiryDate: point.expiryDate
-            ? moment(point.expiryDate).format("DD/MM/YYYY")
-            : "-",
-          daysUntilExpiry:
-            daysUntilExpiry !== null
-              ? daysUntilExpiry > 0
-                ? `${daysUntilExpiry} hari`
-                : "EXPIRED"
-              : "-",
+          transactionAmount: point.sale ? parseFloat(point.sale.finalAmount) : 0,
+          expiryDate: point.expiryDate ? moment(point.expiryDate).format("DD/MM/YYYY") : "-",
+          daysUntilExpiry: daysUntilExpiry !== null ? (daysUntilExpiry > 0 ? `${daysUntilExpiry} hari` : "EXPIRED") : "-",
           isExpired: point.isExpired ? "YA" : "TIDAK",
         };
       });
@@ -1287,23 +935,10 @@ class ReportController {
           { header: "Sudah Expired?", key: "isExpired", width: 12 },
         ];
 
-        const buffer = await ExcelExporter.exportToExcel(
-          data,
-          columns,
-          "Bonus Point",
-          "LAPORAN BONUS POINT PER ANGGOTA"
-        );
+        const buffer = await ExcelExporter.exportToExcel(data, columns, "Bonus Point", "LAPORAN BONUS POINT PER ANGGOTA");
 
-        res.setHeader(
-          "Content-Type",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        );
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename=${ExcelExporter.generateFilename(
-            "Laporan_Bonus_Point"
-          )}`
-        );
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename=${ExcelExporter.generateFilename("Laporan_Bonus_Point")}`);
         return res.send(buffer);
       }
 
@@ -1314,12 +949,7 @@ class ReportController {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
 
-      return ApiResponse.paginated(
-        res,
-        data,
-        pagination,
-        "Laporan bonus point berhasil diambil"
-      );
+      return ApiResponse.paginated(res, data, pagination, "Laporan bonus point berhasil diambil");
     } catch (error) {
       next(error);
     }
@@ -1344,24 +974,8 @@ class ReportController {
         attributes: [
           [sequelize.fn("COUNT", sequelize.col("id")), "totalTransactions"],
           [sequelize.fn("SUM", sequelize.col("final_amount")), "totalRevenue"],
-          [
-            sequelize.fn(
-              "SUM",
-              sequelize.literal(
-                "CASE WHEN sale_type = 'TUNAI' THEN final_amount ELSE 0 END"
-              )
-            ),
-            "tunaiRevenue",
-          ],
-          [
-            sequelize.fn(
-              "SUM",
-              sequelize.literal(
-                "CASE WHEN sale_type = 'KREDIT' THEN final_amount ELSE 0 END"
-              )
-            ),
-            "kreditRevenue",
-          ],
+          [sequelize.fn("SUM", sequelize.literal("CASE WHEN sale_type = 'TUNAI' THEN final_amount ELSE 0 END")), "tunaiRevenue"],
+          [sequelize.fn("SUM", sequelize.literal("CASE WHEN sale_type = 'KREDIT' THEN final_amount ELSE 0 END")), "kreditRevenue"],
         ],
         where: startDate && endDate ? { saleDate: whereClause.createdAt } : {},
         raw: true,
@@ -1373,8 +987,7 @@ class ReportController {
           [sequelize.fn("COUNT", sequelize.col("id")), "totalPurchases"],
           [sequelize.fn("SUM", sequelize.col("total_amount")), "totalSpending"],
         ],
-        where:
-          startDate && endDate ? { purchaseDate: whereClause.createdAt } : {},
+        where: startDate && endDate ? { purchaseDate: whereClause.createdAt } : {},
         raw: true,
       });
 
@@ -1382,15 +995,7 @@ class ReportController {
       const debtSummary = await SupplierDebt.findOne({
         attributes: [
           [sequelize.fn("SUM", sequelize.col("remaining_amount")), "totalDebt"],
-          [
-            sequelize.fn(
-              "COUNT",
-              sequelize.literal(
-                "CASE WHEN status IN ('PENDING', 'PARTIAL') THEN 1 END"
-              )
-            ),
-            "pendingCount",
-          ],
+          [sequelize.fn("COUNT", sequelize.literal("CASE WHEN status IN ('PENDING', 'PARTIAL') THEN 1 END")), "pendingCount"],
         ],
         raw: true,
       });
@@ -1398,19 +1003,8 @@ class ReportController {
       // Receivable Summary (Piutang dari Member)
       const receivableSummary = await MemberDebt.findOne({
         attributes: [
-          [
-            sequelize.fn("SUM", sequelize.col("remaining_amount")),
-            "totalReceivable",
-          ],
-          [
-            sequelize.fn(
-              "COUNT",
-              sequelize.literal(
-                "CASE WHEN status IN ('PENDING', 'PARTIAL') THEN 1 END"
-              )
-            ),
-            "pendingCount",
-          ],
+          [sequelize.fn("SUM", sequelize.col("remaining_amount")), "totalReceivable"],
+          [sequelize.fn("COUNT", sequelize.literal("CASE WHEN status IN ('PENDING', 'PARTIAL') THEN 1 END")), "pendingCount"],
         ],
         raw: true,
       });
@@ -1418,33 +1012,9 @@ class ReportController {
       // Point Summary
       const pointSummary = await PointTransaction.findOne({
         attributes: [
-          [
-            sequelize.fn(
-              "SUM",
-              sequelize.literal(
-                "CASE WHEN type = 'EARN' THEN points ELSE 0 END"
-              )
-            ),
-            "totalEarned",
-          ],
-          [
-            sequelize.fn(
-              "SUM",
-              sequelize.literal(
-                "CASE WHEN type = 'REDEEM' THEN ABS(points) ELSE 0 END"
-              )
-            ),
-            "totalRedeemed",
-          ],
-          [
-            sequelize.fn(
-              "SUM",
-              sequelize.literal(
-                "CASE WHEN type = 'EXPIRED' THEN ABS(points) ELSE 0 END"
-              )
-            ),
-            "totalExpired",
-          ],
+          [sequelize.fn("SUM", sequelize.literal("CASE WHEN type = 'EARN' THEN points ELSE 0 END")), "totalEarned"],
+          [sequelize.fn("SUM", sequelize.literal("CASE WHEN type = 'REDEEM' THEN ABS(points) ELSE 0 END")), "totalRedeemed"],
+          [sequelize.fn("SUM", sequelize.literal("CASE WHEN type = 'EXPIRED' THEN ABS(points) ELSE 0 END")), "totalExpired"],
         ],
         where: whereClause,
         raw: true,
@@ -1454,20 +1024,8 @@ class ReportController {
       const productStats = await Product.findOne({
         attributes: [
           [sequelize.fn("COUNT", sequelize.col("id")), "totalProducts"],
-          [
-            sequelize.fn(
-              "COUNT",
-              sequelize.literal("CASE WHEN stock = 0 THEN 1 END")
-            ),
-            "outOfStock",
-          ],
-          [
-            sequelize.fn(
-              "COUNT",
-              sequelize.literal("CASE WHEN stock <= min_stock THEN 1 END")
-            ),
-            "lowStock",
-          ],
+          [sequelize.fn("COUNT", sequelize.literal("CASE WHEN stock = 0 THEN 1 END")), "outOfStock"],
+          [sequelize.fn("COUNT", sequelize.literal("CASE WHEN stock <= min_stock THEN 1 END")), "lowStock"],
         ],
         where: { isActive: true },
         raw: true,
@@ -1477,13 +1035,7 @@ class ReportController {
       const memberStats = await Member.findOne({
         attributes: [
           [sequelize.fn("COUNT", sequelize.col("id")), "totalMembers"],
-          [
-            sequelize.fn(
-              "COUNT",
-              sequelize.literal("CASE WHEN is_active = 1 THEN 1 END")
-            ),
-            "activeMembers",
-          ],
+          [sequelize.fn("COUNT", sequelize.literal("CASE WHEN is_active = 1 THEN 1 END")), "activeMembers"],
           [sequelize.fn("SUM", sequelize.col("total_points")), "totalPoints"],
         ],
         raw: true,
@@ -1540,11 +1092,7 @@ class ReportController {
         },
       };
 
-      return ApiResponse.success(
-        res,
-        summary,
-        "Summary dashboard berhasil diambil"
-      );
+      return ApiResponse.success(res, summary, "Summary dashboard berhasil diambil");
     } catch (error) {
       next(error);
     }

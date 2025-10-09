@@ -132,10 +132,22 @@ class SupplierController {
       // Validation
       const errors = {};
 
+      // NEW (add max length check):
       if (!name) {
         errors.name = ["Nama supplier harus diisi"];
       } else if (name.length < 3) {
         errors.name = ["Nama supplier minimal 3 karakter"];
+      } else if (name.length > 100) {
+        // ← NEW!
+        errors.name = ["Nama supplier maksimal 100 karakter"];
+      }
+
+      // Also in update() method (line 151-154):
+      if (name && name.length < 3) {
+        errors.name = ["Nama supplier minimal 3 karakter"];
+      } else if (name && name.length > 100) {
+        // ← NEW!
+        errors.name = ["Nama supplier maksimal 100 karakter"];
       }
 
       if (Object.keys(errors).length > 0) {

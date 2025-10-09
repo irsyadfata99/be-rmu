@@ -1,6 +1,6 @@
 // ============================================
-// src/controllers/PointController.js (NEW)
-// Controller untuk Point Management
+// src/controllers/PointController.js - FIXED VERSION
+// Controller dengan proper transaction rollback handling
 // ============================================
 const PointTransaction = require("../models/PointTransaction");
 const Member = require("../models/Member");
@@ -127,9 +127,12 @@ class PointController {
   // POST /api/points/redeem - Redeem Points (Tukar Point)
   // ============================================
   static async redeemPoints(req, res, next) {
-    const t = await sequelize.transaction();
+    // ✅ FIX: Initialize transaction at the start
+    let t;
 
     try {
+      t = await sequelize.transaction();
+
       const { memberId, points, description, notes } = req.body;
       const userId = req.user.id;
 
@@ -167,9 +170,10 @@ class PointController {
       // Record redemption
       const pointTrx = await PointTransaction.recordRedeem(memberId, points, description || `Penukaran ${points} point`, userId, t);
 
+      // ✅ FIX: Commit before loading complete data
       await t.commit();
 
-      // Load complete transaction
+      // Load complete transaction (after commit)
       const completeTrx = await PointTransaction.findByPk(pointTrx.id, {
         include: [
           {
@@ -193,7 +197,10 @@ class PointController {
         "Points redeemed successfully"
       );
     } catch (error) {
-      await t.rollback();
+      // ✅ FIX: Only rollback if transaction exists and hasn't been committed
+      if (t && !t.finished) {
+        await t.rollback();
+      }
       console.error("Error redeeming points:", error);
       next(error);
     }
@@ -203,9 +210,12 @@ class PointController {
   // POST /api/points/adjust - Adjust Points (ADMIN ONLY)
   // ============================================
   static async adjustPoints(req, res, next) {
-    const t = await sequelize.transaction();
+    // ✅ FIX: Initialize transaction at the start
+    let t;
 
     try {
+      t = await sequelize.transaction();
+
       const { memberId, points, description, notes } = req.body;
       const userId = req.user.id;
 
@@ -231,9 +241,10 @@ class PointController {
       // Record adjustment
       const pointTrx = await PointTransaction.recordAdjustment(memberId, parseInt(points), description, userId, notes, t);
 
+      // ✅ FIX: Commit before loading complete data
       await t.commit();
 
-      // Load complete transaction
+      // Load complete transaction (after commit)
       const completeTrx = await PointTransaction.findByPk(pointTrx.id, {
         include: [
           {
@@ -248,7 +259,10 @@ class PointController {
 
       return ApiResponse.created(res, completeTrx, "Points adjusted successfully");
     } catch (error) {
-      await t.rollback();
+      // ✅ FIX: Only rollback if transaction exists and hasn't been committed
+      if (t && !t.finished) {
+        await t.rollback();
+      }
 
       if (error.message.includes("Point akan menjadi negatif")) {
         return ApiResponse.error(res, error.message, 400);

@@ -1,23 +1,8 @@
 // ============================================
-// src/controllers/ReturnController.js
-// Controller untuk Purchase Return & Sales Return
+// src/controllers/ReturnController.js - FIXED VERSION
+// Controller dengan proper transaction rollback handling
 // ============================================
-const {
-  PurchaseReturn,
-  PurchaseReturnItem,
-  SalesReturn,
-  SalesReturnItem,
-  Purchase,
-  PurchaseItem,
-  Sale,
-  SaleItem,
-  Product,
-  Supplier,
-  Member,
-  SupplierDebt,
-  MemberDebt,
-  StockMovement,
-} = require("../models");
+const { PurchaseReturn, PurchaseReturnItem, SalesReturn, SalesReturnItem, Purchase, PurchaseItem, Sale, SaleItem, Product, Supplier, Member, SupplierDebt, MemberDebt, StockMovement } = require("../models");
 const ApiResponse = require("../utils/response");
 const { sequelize } = require("../config/database");
 const { Op } = require("sequelize");
@@ -32,17 +17,7 @@ class ReturnController {
    */
   static async getPurchaseReturns(req, res, next) {
     try {
-      const {
-        page = 1,
-        limit = 10,
-        search = "",
-        supplierId,
-        status,
-        startDate,
-        endDate,
-        sortBy = "returnDate",
-        sortOrder = "DESC",
-      } = req.query;
+      const { page = 1, limit = 10, search = "", supplierId, status, startDate, endDate, sortBy = "returnDate", sortOrder = "DESC" } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const whereClause = {};
@@ -97,12 +72,7 @@ class ReturnController {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
 
-      return ApiResponse.paginated(
-        res,
-        rows,
-        pagination,
-        "Retur pembelian berhasil diambil"
-      );
+      return ApiResponse.paginated(res, rows, pagination, "Retur pembelian berhasil diambil");
     } catch (error) {
       next(error);
     }
@@ -145,11 +115,7 @@ class ReturnController {
         return ApiResponse.notFound(res, "Retur pembelian tidak ditemukan");
       }
 
-      return ApiResponse.success(
-        res,
-        purchaseReturn,
-        "Detail retur pembelian berhasil diambil"
-      );
+      return ApiResponse.success(res, purchaseReturn, "Detail retur pembelian berhasil diambil");
     } catch (error) {
       next(error);
     }
@@ -159,9 +125,12 @@ class ReturnController {
    * POST /api/returns/purchases - Create purchase return
    */
   static async createPurchaseReturn(req, res, next) {
-    const t = await sequelize.transaction();
+    // ✅ FIX: Initialize transaction at the start
+    let t;
 
     try {
+      t = await sequelize.transaction();
+
       const { purchaseId, items, reason, notes } = req.body;
       const userId = req.user.id;
 
@@ -199,11 +168,7 @@ class ReturnController {
 
         if (!product) {
           await t.rollback();
-          return ApiResponse.error(
-            res,
-            `Produk tidak ditemukan: ${item.productId}`,
-            404
-          );
+          return ApiResponse.error(res, `Produk tidak ditemukan: ${item.productId}`, 404);
         }
 
         // Validate quantity
@@ -265,11 +230,7 @@ class ReturnController {
 
         if (product.stock < item.quantity) {
           await t.rollback();
-          return ApiResponse.error(
-            res,
-            `Stok tidak cukup untuk ${product.name}. Tersedia: ${product.stock}`,
-            400
-          );
+          return ApiResponse.error(res, `Stok tidak cukup untuk ${product.name}. Tersedia: ${product.stock}`, 400);
         }
 
         await product.update(
@@ -296,9 +257,10 @@ class ReturnController {
         );
       }
 
+      // ✅ FIX: Commit transaction before loading complete data
       await t.commit();
 
-      // Load complete data
+      // Load complete data (after commit)
       const completeReturn = await PurchaseReturn.findByPk(purchaseReturn.id, {
         include: [
           {
@@ -319,19 +281,14 @@ class ReturnController {
         ],
       });
 
-      console.log(
-        `✅ Purchase return created: ${returnNumber} - Rp ${totalAmount.toLocaleString(
-          "id-ID"
-        )}`
-      );
+      console.log(`✅ Purchase return created: ${returnNumber} - Rp ${totalAmount.toLocaleString("id-ID")}`);
 
-      return ApiResponse.created(
-        res,
-        completeReturn,
-        "Retur pembelian berhasil dibuat"
-      );
+      return ApiResponse.created(res, completeReturn, "Retur pembelian berhasil dibuat");
     } catch (error) {
-      await t.rollback();
+      // ✅ FIX: Only rollback if transaction exists and hasn't been committed
+      if (t && !t.finished) {
+        await t.rollback();
+      }
       console.error("❌ Error creating purchase return:", error);
       next(error);
     }
@@ -341,9 +298,12 @@ class ReturnController {
    * PATCH /api/returns/purchases/:id/approve - Approve purchase return
    */
   static async approvePurchaseReturn(req, res, next) {
-    const t = await sequelize.transaction();
+    // ✅ FIX: Initialize transaction at the start
+    let t;
 
     try {
+      t = await sequelize.transaction();
+
       const { id } = req.params;
       const { notes } = req.body;
 
@@ -364,11 +324,7 @@ class ReturnController {
 
       if (purchaseReturn.status !== "PENDING") {
         await t.rollback();
-        return ApiResponse.error(
-          res,
-          `Retur sudah ${purchaseReturn.status}`,
-          400
-        );
+        return ApiResponse.error(res, `Retur sudah ${purchaseReturn.status}`, 400);
       }
 
       // Update status
@@ -388,10 +344,7 @@ class ReturnController {
         });
 
         if (debt && debt.remainingAmount > 0) {
-          const deductAmount = Math.min(
-            purchaseReturn.totalAmount,
-            debt.remainingAmount
-          );
+          const deductAmount = Math.min(purchaseReturn.totalAmount, debt.remainingAmount);
 
           debt.paidAmount = parseFloat(debt.paidAmount) + deductAmount;
           debt.remainingAmount = parseFloat(debt.totalAmount) - debt.paidAmount;
@@ -411,8 +364,10 @@ class ReturnController {
         }
       }
 
+      // ✅ FIX: Commit before loading updated data
       await t.commit();
 
+      // Load updated data (after commit)
       const updatedReturn = await PurchaseReturn.findByPk(id, {
         include: [
           {
@@ -422,17 +377,14 @@ class ReturnController {
         ],
       });
 
-      console.log(
-        `✅ Purchase return approved: ${purchaseReturn.returnNumber}`
-      );
+      console.log(`✅ Purchase return approved: ${purchaseReturn.returnNumber}`);
 
-      return ApiResponse.success(
-        res,
-        updatedReturn,
-        "Retur pembelian berhasil disetujui"
-      );
+      return ApiResponse.success(res, updatedReturn, "Retur pembelian berhasil disetujui");
     } catch (error) {
-      await t.rollback();
+      // ✅ FIX: Only rollback if transaction exists and hasn't been committed
+      if (t && !t.finished) {
+        await t.rollback();
+      }
       console.error("❌ Error approving purchase return:", error);
       next(error);
     }
@@ -442,9 +394,12 @@ class ReturnController {
    * PATCH /api/returns/purchases/:id/reject - Reject purchase return
    */
   static async rejectPurchaseReturn(req, res, next) {
-    const t = await sequelize.transaction();
+    // ✅ FIX: Initialize transaction at the start
+    let t;
 
     try {
+      t = await sequelize.transaction();
+
       const { id } = req.params;
       const { notes } = req.body;
 
@@ -470,11 +425,7 @@ class ReturnController {
 
       if (purchaseReturn.status !== "PENDING") {
         await t.rollback();
-        return ApiResponse.error(
-          res,
-          `Retur sudah ${purchaseReturn.status}`,
-          400
-        );
+        return ApiResponse.error(res, `Retur sudah ${purchaseReturn.status}`, 400);
       }
 
       // Update status
@@ -499,19 +450,17 @@ class ReturnController {
         );
       }
 
+      // ✅ FIX: Commit before returning response
       await t.commit();
 
-      console.log(
-        `❌ Purchase return rejected: ${purchaseReturn.returnNumber}`
-      );
+      console.log(`❌ Purchase return rejected: ${purchaseReturn.returnNumber}`);
 
-      return ApiResponse.success(
-        res,
-        purchaseReturn,
-        "Retur pembelian berhasil ditolak"
-      );
+      return ApiResponse.success(res, purchaseReturn, "Retur pembelian berhasil ditolak");
     } catch (error) {
-      await t.rollback();
+      // ✅ FIX: Only rollback if transaction exists and hasn't been committed
+      if (t && !t.finished) {
+        await t.rollback();
+      }
       console.error("❌ Error rejecting purchase return:", error);
       next(error);
     }
@@ -526,17 +475,7 @@ class ReturnController {
    */
   static async getSalesReturns(req, res, next) {
     try {
-      const {
-        page = 1,
-        limit = 10,
-        search = "",
-        memberId,
-        status,
-        startDate,
-        endDate,
-        sortBy = "returnDate",
-        sortOrder = "DESC",
-      } = req.query;
+      const { page = 1, limit = 10, search = "", memberId, status, startDate, endDate, sortBy = "returnDate", sortOrder = "DESC" } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const whereClause = {};
@@ -591,12 +530,7 @@ class ReturnController {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
 
-      return ApiResponse.paginated(
-        res,
-        rows,
-        pagination,
-        "Retur penjualan berhasil diambil"
-      );
+      return ApiResponse.paginated(res, rows, pagination, "Retur penjualan berhasil diambil");
     } catch (error) {
       next(error);
     }
@@ -639,11 +573,7 @@ class ReturnController {
         return ApiResponse.notFound(res, "Retur penjualan tidak ditemukan");
       }
 
-      return ApiResponse.success(
-        res,
-        salesReturn,
-        "Detail retur penjualan berhasil diambil"
-      );
+      return ApiResponse.success(res, salesReturn, "Detail retur penjualan berhasil diambil");
     } catch (error) {
       next(error);
     }
@@ -653,9 +583,12 @@ class ReturnController {
    * POST /api/returns/sales - Create sales return
    */
   static async createSalesReturn(req, res, next) {
-    const t = await sequelize.transaction();
+    // ✅ FIX: Initialize transaction at the start
+    let t;
 
     try {
+      t = await sequelize.transaction();
+
       const { saleId, items, reason, refundMethod = "CASH", notes } = req.body;
       const userId = req.user.id;
 
@@ -693,11 +626,7 @@ class ReturnController {
 
         if (!product) {
           await t.rollback();
-          return ApiResponse.error(
-            res,
-            `Produk tidak ditemukan: ${item.productId}`,
-            404
-          );
+          return ApiResponse.error(res, `Produk tidak ditemukan: ${item.productId}`, 404);
         }
 
         // Validate quantity
@@ -782,9 +711,10 @@ class ReturnController {
         );
       }
 
+      // ✅ FIX: Commit before loading complete data
       await t.commit();
 
-      // Load complete data
+      // Load complete data (after commit)
       const completeReturn = await SalesReturn.findByPk(salesReturn.id, {
         include: [
           {
@@ -805,19 +735,14 @@ class ReturnController {
         ],
       });
 
-      console.log(
-        `✅ Sales return created: ${returnNumber} - Rp ${totalAmount.toLocaleString(
-          "id-ID"
-        )}`
-      );
+      console.log(`✅ Sales return created: ${returnNumber} - Rp ${totalAmount.toLocaleString("id-ID")}`);
 
-      return ApiResponse.created(
-        res,
-        completeReturn,
-        "Retur penjualan berhasil dibuat"
-      );
+      return ApiResponse.created(res, completeReturn, "Retur penjualan berhasil dibuat");
     } catch (error) {
-      await t.rollback();
+      // ✅ FIX: Only rollback if transaction exists and hasn't been committed
+      if (t && !t.finished) {
+        await t.rollback();
+      }
       console.error("❌ Error creating sales return:", error);
       next(error);
     }
@@ -827,9 +752,12 @@ class ReturnController {
    * PATCH /api/returns/sales/:id/approve - Approve sales return
    */
   static async approveSalesReturn(req, res, next) {
-    const t = await sequelize.transaction();
+    // ✅ FIX: Initialize transaction at the start
+    let t;
 
     try {
+      t = await sequelize.transaction();
+
       const { id } = req.params;
       const { notes } = req.body;
 
@@ -863,10 +791,7 @@ class ReturnController {
       );
 
       // Handle refund based on method
-      if (
-        salesReturn.refundMethod === "DEBT_DEDUCTION" &&
-        salesReturn.sale.saleType === "KREDIT"
-      ) {
+      if (salesReturn.refundMethod === "DEBT_DEDUCTION" && salesReturn.sale.saleType === "KREDIT") {
         // Kurangi hutang member
         const debt = await MemberDebt.findOne({
           where: { saleId: salesReturn.saleId },
@@ -874,10 +799,7 @@ class ReturnController {
         });
 
         if (debt && debt.remainingAmount > 0) {
-          const deductAmount = Math.min(
-            salesReturn.totalAmount,
-            debt.remainingAmount
-          );
+          const deductAmount = Math.min(salesReturn.totalAmount, debt.remainingAmount);
 
           debt.paidAmount = parseFloat(debt.paidAmount) + deductAmount;
           debt.remainingAmount = parseFloat(debt.totalAmount) - debt.paidAmount;
@@ -899,8 +821,10 @@ class ReturnController {
         }
       }
 
+      // ✅ FIX: Commit before loading updated data
       await t.commit();
 
+      // Load updated data (after commit)
       const updatedReturn = await SalesReturn.findByPk(id, {
         include: [
           {
@@ -912,13 +836,12 @@ class ReturnController {
 
       console.log(`✅ Sales return approved: ${salesReturn.returnNumber}`);
 
-      return ApiResponse.success(
-        res,
-        updatedReturn,
-        "Retur penjualan berhasil disetujui"
-      );
+      return ApiResponse.success(res, updatedReturn, "Retur penjualan berhasil disetujui");
     } catch (error) {
-      await t.rollback();
+      // ✅ FIX: Only rollback if transaction exists and hasn't been committed
+      if (t && !t.finished) {
+        await t.rollback();
+      }
       console.error("❌ Error approving sales return:", error);
       next(error);
     }
@@ -928,9 +851,12 @@ class ReturnController {
    * PATCH /api/returns/sales/:id/reject - Reject sales return
    */
   static async rejectSalesReturn(req, res, next) {
-    const t = await sequelize.transaction();
+    // ✅ FIX: Initialize transaction at the start
+    let t;
 
     try {
+      t = await sequelize.transaction();
+
       const { id } = req.params;
       const { notes } = req.body;
 
@@ -981,17 +907,17 @@ class ReturnController {
         );
       }
 
+      // ✅ FIX: Commit before returning response
       await t.commit();
 
       console.log(`❌ Sales return rejected: ${salesReturn.returnNumber}`);
 
-      return ApiResponse.success(
-        res,
-        salesReturn,
-        "Retur penjualan berhasil ditolak"
-      );
+      return ApiResponse.success(res, salesReturn, "Retur penjualan berhasil ditolak");
     } catch (error) {
-      await t.rollback();
+      // ✅ FIX: Only rollback if transaction exists and hasn't been committed
+      if (t && !t.finished) {
+        await t.rollback();
+      }
       console.error("❌ Error rejecting sales return:", error);
       next(error);
     }
@@ -1023,12 +949,9 @@ class ReturnController {
       const pendingPurchaseReturns = await PurchaseReturn.count({
         where: { ...whereClause, status: "PENDING" },
       });
-      const totalPurchaseReturnAmount = await PurchaseReturn.sum(
-        "totalAmount",
-        {
-          where: { ...whereClause, status: "APPROVED" },
-        }
-      );
+      const totalPurchaseReturnAmount = await PurchaseReturn.sum("totalAmount", {
+        where: { ...whereClause, status: "APPROVED" },
+      });
 
       // Sales returns
       const totalSalesReturns = await SalesReturn.count({ where: whereClause });
@@ -1052,11 +975,7 @@ class ReturnController {
         },
       };
 
-      return ApiResponse.success(
-        res,
-        stats,
-        "Statistik retur berhasil diambil"
-      );
+      return ApiResponse.success(res, stats, "Statistik retur berhasil diambil");
     } catch (error) {
       next(error);
     }

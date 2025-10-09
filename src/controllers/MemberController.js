@@ -1,32 +1,12 @@
 // ============================================
 // src/controllers/MemberController.js
 // Controller untuk mengelola anggota (members)
+// ✅ FIXED: Use REGIONS constant + max length validation
 // ============================================
 const Member = require("../models/Member");
 const ApiResponse = require("../utils/response");
 const { Op } = require("sequelize");
-
-// Mapping region codes ke region names
-const REGIONS = {
-  BDG: "Bandung",
-  KBG: "Kabupaten Bandung",
-  KBB: "Kabupaten Bandung Barat",
-  KBT: "Kabupaten Bandung Timur",
-  CMH: "Cimahi",
-  GRT: "Garut",
-  KGU: "Kabupaten Garut Utara",
-  KGS: "Kabupaten Garut Selatan",
-  SMD: "Sumedang",
-  TSM: "Tasikmalaya",
-  SMI: "Kota Sukabumi",
-  KSI: "Kabupaten Sukabumi",
-  KSU: "Kabupaten Sukabumi Utara",
-  CJR: "Cianjur",
-  BGR: "Bogor",
-  KBR: "Kabupaten Bogor",
-  YMG: "Yamughni",
-  PMB: "Pembina",
-};
+const { REGIONS, isValidRegionCode, getRegionName } = require("../constants/regions");
 
 class MemberController {
   // ============================================
@@ -66,20 +46,20 @@ class MemberController {
         errors.address = ["Alamat maksimal 255 karakter"];
       }
 
-      // Region Code validation
+      // Region Code validation (use constant)
       if (!regionCode) {
         errors.regionCode = ["Wilayah harus dipilih"];
-      } else if (!REGIONS[regionCode]) {
+      } else if (!isValidRegionCode(regionCode)) {
         errors.regionCode = ["Kode wilayah tidak valid"];
       }
 
-      // WhatsApp validation
+      // WhatsApp validation (max 15 chars)
       if (!whatsapp) {
         errors.whatsapp = ["Nomor WhatsApp harus diisi"];
+      } else if (whatsapp.length > 15) {
+        errors.whatsapp = ["Nomor WhatsApp maksimal 15 karakter"];
       } else if (!/^08\d{8,11}$/.test(whatsapp)) {
-        errors.whatsapp = [
-          "Format nomor WhatsApp tidak valid (contoh: 081234567890)",
-        ];
+        errors.whatsapp = ["Format nomor WhatsApp tidak valid (contoh: 081234567890)"];
       }
 
       // Gender validation
@@ -105,8 +85,8 @@ class MemberController {
       // ===== GENERATE UNIQUE ID =====
       const uniqueId = await Member.generateUniqueId(regionCode);
 
-      // ===== GET REGION NAME =====
-      const regionName = REGIONS[regionCode];
+      // ===== GET REGION NAME (from constant) =====
+      const regionName = getRegionName(regionCode);
 
       // ===== CREATE MEMBER =====
       const member = await Member.create({
@@ -126,9 +106,7 @@ class MemberController {
       });
 
       // ===== LOG ACTIVITY =====
-      console.log(
-        `✅ Member registered: ${member.uniqueId} - ${member.fullName}`
-      );
+      console.log(`✅ Member registered: ${member.uniqueId} - ${member.fullName}`);
 
       return ApiResponse.created(res, member, "Pendaftaran anggota berhasil");
     } catch (error) {
@@ -154,7 +132,7 @@ class MemberController {
 
       console.log(`🔍 Searching for member: ${normalizedId}`);
 
-      // Search member dengan raw attributes untuk debugging
+      // Search member
       const member = await Member.findOne({
         where: {
           uniqueId: {
@@ -186,10 +164,7 @@ class MemberController {
           limit: 5,
         });
 
-        console.log(
-          `📋 Similar members with prefix ${prefix}:`,
-          similarMembers.map((m) => m.uniqueId).join(", ")
-        );
+        console.log(`📋 Similar members with prefix ${prefix}:`, similarMembers.map((m) => m.uniqueId).join(", "));
       }
 
       if (!member) {
@@ -202,9 +177,7 @@ class MemberController {
         return ApiResponse.error(res, "Anggota tidak aktif", 403);
       }
 
-      console.log(
-        `✅ Returning member data: ${member.uniqueId} - ${member.fullName}`
-      );
+      console.log(`✅ Returning member data: ${member.uniqueId} - ${member.fullName}`);
 
       return ApiResponse.success(res, member, "Anggota ditemukan");
     } catch (error) {
@@ -218,15 +191,7 @@ class MemberController {
   // ============================================
   static async getAll(req, res, next) {
     try {
-      const {
-        page = 1,
-        limit = 10,
-        search = "",
-        regionCode = "",
-        isActive,
-        sortBy = "createdAt",
-        sortOrder = "DESC",
-      } = req.query;
+      const { page = 1, limit = 10, search = "", regionCode = "", isActive, sortBy = "createdAt", sortOrder = "DESC" } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
 
@@ -235,11 +200,7 @@ class MemberController {
 
       // Search by name, uniqueId, or NIK
       if (search) {
-        whereClause[Op.or] = [
-          { fullName: { [Op.like]: `%${search}%` } },
-          { uniqueId: { [Op.like]: `%${search}%` } },
-          { nik: { [Op.like]: `%${search}%` } },
-        ];
+        whereClause[Op.or] = [{ fullName: { [Op.like]: `%${search}%` } }, { uniqueId: { [Op.like]: `%${search}%` } }, { nik: { [Op.like]: `%${search}%` } }];
       }
 
       // Filter by region
@@ -267,12 +228,7 @@ class MemberController {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
 
-      return ApiResponse.paginated(
-        res,
-        rows,
-        pagination,
-        "Data anggota berhasil diambil"
-      );
+      return ApiResponse.paginated(res, rows, pagination, "Data anggota berhasil diambil");
     } catch (error) {
       console.error("❌ Error getting members:", error);
       next(error);
@@ -305,8 +261,7 @@ class MemberController {
   static async update(req, res, next) {
     try {
       const { id } = req.params;
-      const { fullName, address, regionCode, whatsapp, gender, isActive } =
-        req.body;
+      const { fullName, address, regionCode, whatsapp, gender, isActive } = req.body;
 
       const member = await Member.findByPk(id);
 
@@ -317,20 +272,32 @@ class MemberController {
       // Validation
       const errors = {};
 
-      if (fullName && fullName.length < 3) {
-        errors.fullName = ["Nama lengkap minimal 3 karakter"];
+      if (fullName) {
+        if (fullName.length < 3) {
+          errors.fullName = ["Nama lengkap minimal 3 karakter"];
+        } else if (fullName.length > 100) {
+          errors.fullName = ["Nama lengkap maksimal 100 karakter"];
+        }
       }
 
-      if (address && address.length < 10) {
-        errors.address = ["Alamat minimal 10 karakter"];
+      if (address) {
+        if (address.length < 10) {
+          errors.address = ["Alamat minimal 10 karakter"];
+        } else if (address.length > 255) {
+          errors.address = ["Alamat maksimal 255 karakter"];
+        }
       }
 
-      if (regionCode && !REGIONS[regionCode]) {
+      if (regionCode && !isValidRegionCode(regionCode)) {
         errors.regionCode = ["Kode wilayah tidak valid"];
       }
 
-      if (whatsapp && !/^08\d{8,11}$/.test(whatsapp)) {
-        errors.whatsapp = ["Format nomor WhatsApp tidak valid"];
+      if (whatsapp) {
+        if (whatsapp.length > 15) {
+          errors.whatsapp = ["Nomor WhatsApp maksimal 15 karakter"];
+        } else if (!/^08\d{8,11}$/.test(whatsapp)) {
+          errors.whatsapp = ["Format nomor WhatsApp tidak valid"];
+        }
       }
 
       if (gender && !["Laki-laki", "Perempuan"].includes(gender)) {
@@ -353,7 +320,7 @@ class MemberController {
       if (regionCode && regionCode !== member.regionCode) {
         const newUniqueId = await Member.generateUniqueId(regionCode);
         updateData.regionCode = regionCode;
-        updateData.regionName = REGIONS[regionCode];
+        updateData.regionName = getRegionName(regionCode);
         updateData.uniqueId = newUniqueId;
       }
 
@@ -384,15 +351,9 @@ class MemberController {
       // Soft delete - set isActive to false
       await member.update({ isActive: false });
 
-      console.log(
-        `🗑️ Member deactivated: ${member.uniqueId} - ${member.fullName}`
-      );
+      console.log(`🗑️ Member deactivated: ${member.uniqueId} - ${member.fullName}`);
 
-      return ApiResponse.success(
-        res,
-        { id: member.id },
-        "Anggota berhasil dinonaktifkan"
-      );
+      return ApiResponse.success(res, { id: member.id }, "Anggota berhasil dinonaktifkan");
     } catch (error) {
       console.error("❌ Error deleting member:", error);
       next(error);
@@ -414,17 +375,9 @@ class MemberController {
 
       await member.update({ isActive: !member.isActive });
 
-      console.log(
-        `🔄 Member ${member.isActive ? "activated" : "deactivated"}: ${
-          member.uniqueId
-        } - ${member.fullName}`
-      );
+      console.log(`🔄 Member ${member.isActive ? "activated" : "deactivated"}: ${member.uniqueId} - ${member.fullName}`);
 
-      return ApiResponse.success(
-        res,
-        member,
-        `Anggota berhasil ${member.isActive ? "diaktifkan" : "dinonaktifkan"}`
-      );
+      return ApiResponse.success(res, member, `Anggota berhasil ${member.isActive ? "diaktifkan" : "dinonaktifkan"}`);
     } catch (error) {
       console.error("❌ Error toggling member status:", error);
       next(error);
@@ -448,11 +401,7 @@ class MemberController {
         inactiveMembers,
       };
 
-      return ApiResponse.success(
-        res,
-        stats,
-        "Statistik anggota berhasil diambil"
-      );
+      return ApiResponse.success(res, stats, "Statistik anggota berhasil diambil");
     } catch (error) {
       console.error("❌ Error getting member stats:", error);
       next(error);

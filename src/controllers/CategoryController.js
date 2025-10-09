@@ -69,10 +69,28 @@ class CategoryController {
     try {
       const { name, description } = req.body;
 
-      // Validation
+      // In create() method (line 70-74):
       if (!name) {
         return ApiResponse.error(res, "Nama kategori harus diisi", 422, {
           name: ["Nama kategori harus diisi"],
+        });
+      } else if (name.length < 3) {
+        // ← NEW!
+        return ApiResponse.error(res, "Nama kategori minimal 3 karakter", 422, {
+          name: ["Nama kategori minimal 3 karakter"],
+        });
+      } else if (name.length > 50) {
+        // ← NEW!
+        return ApiResponse.error(res, "Nama kategori maksimal 50 karakter", 422, {
+          name: ["Nama kategori maksimal 50 karakter"],
+        });
+      }
+
+      // ✅ ADD: Description max length validation
+      if (description && description.length > 255) {
+        // ← NEW!
+        return ApiResponse.error(res, "Deskripsi maksimal 255 karakter", 422, {
+          description: ["Deskripsi maksimal 255 karakter"],
         });
       }
 

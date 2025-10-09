@@ -1,12 +1,43 @@
 // ============================================
-// src/controllers/ProductController.js
-// Controller untuk manage produk
+// src/controllers/ProductController.js - FIXED VERSION
+// Controller dengan SQL Injection protection & validation
 // ============================================
 const Product = require("../models/Product");
 const Category = require("../models/Category");
 const Supplier = require("../models/Supplier");
 const ApiResponse = require("../utils/response");
-const { Op } = require("sequelize");
+const { Op, literal, col, where } = require("sequelize");
+
+/**
+ * ✅ FIX: Added input sanitization helper
+ * Prevents SQL injection in LIKE queries
+ */
+function sanitizeLikeInput(input) {
+  if (!input) return "";
+  // Escape special characters for SQL LIKE
+  return String(input)
+    .replace(/[%_\\]/g, "\\$&") // Escape %, _, and \
+    .trim();
+}
+
+/**
+ * ✅ FIX: Added validation helper for sort parameters
+ * Prevents SQL injection via sortBy parameter
+ */
+function validateSortField(sortBy, allowedFields) {
+  if (!sortBy || !allowedFields.includes(sortBy)) {
+    return allowedFields[0]; // Return default
+  }
+  return sortBy;
+}
+
+/**
+ * ✅ FIX: Added validation helper for sort order
+ */
+function validateSortOrder(sortOrder) {
+  const normalized = String(sortOrder).toUpperCase();
+  return ["ASC", "DESC"].includes(normalized) ? normalized : "DESC";
+}
 
 class ProductController {
   // ============================================
@@ -16,47 +47,63 @@ class ProductController {
     try {
       const { page = 1, limit = 10, search = "", categoryId, supplierId, isActive, lowStock = false, outOfStock = false, sortBy = "createdAt", sortOrder = "DESC" } = req.query;
 
-      const offset = (parseInt(page) - 1) * parseInt(limit);
+      // ✅ FIX: Validate and sanitize inputs
+      const pageNum = Math.max(1, parseInt(page) || 1);
+      const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 10)); // Max 100 items per page
+      const offset = (pageNum - 1) * limitNum;
+
+      // ✅ FIX: Validate sort parameters
+      const allowedSortFields = ["createdAt", "updatedAt", "name", "sku", "barcode", "stock", "sellingPrice", "purchasePrice"];
+      const validSortBy = validateSortField(sortBy, allowedSortFields);
+      const validSortOrder = validateSortOrder(sortOrder);
 
       // Build where clause
       const whereClause = {};
 
-      // Search by name, barcode, or SKU
+      // ✅ FIX: Sanitize search input to prevent SQL injection
       if (search) {
-        whereClause[Op.or] = [{ name: { [Op.like]: `%${search}%` } }, { barcode: { [Op.like]: `%${search}%` } }, { sku: { [Op.like]: `%${search}%` } }];
+        const sanitizedSearch = sanitizeLikeInput(search);
+        whereClause[Op.or] = [{ name: { [Op.like]: `%${sanitizedSearch}%` } }, { barcode: { [Op.like]: `%${sanitizedSearch}%` } }, { sku: { [Op.like]: `%${sanitizedSearch}%` } }];
       }
 
-      // Filter by category
+      // ✅ FIX: Validate categoryId is a valid UUID/number
       if (categoryId) {
-        whereClause.categoryId = categoryId;
+        // Check if it's a valid ID format (UUID or number)
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(categoryId) || /^\d+$/.test(categoryId)) {
+          whereClause.categoryId = categoryId;
+        }
       }
 
-      // Filter by supplier
+      // ✅ FIX: Validate supplierId
       if (supplierId) {
-        whereClause.supplierId = supplierId;
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(supplierId) || /^\d+$/.test(supplierId)) {
+          whereClause.supplierId = supplierId;
+        }
       }
 
-      // Filter by active status
+      // ✅ FIX: Properly validate boolean parameters
       if (isActive !== undefined) {
-        whereClause.isActive = isActive === "true";
+        whereClause.isActive = isActive === "true" || isActive === true;
       }
 
-      // Filter low stock
-      if (lowStock === "true") {
-        whereClause[Op.and] = [require("sequelize").where(require("sequelize").col("stock"), "<=", require("sequelize").col("min_stock"))];
+      // ✅ FIX: Use Sequelize's where() function for low stock comparison
+      // This prevents SQL injection in raw queries
+      if (lowStock === "true" || lowStock === true) {
+        whereClause[Op.and] = whereClause[Op.and] || [];
+        whereClause[Op.and].push(where(col("stock"), Op.lte, col("min_stock")));
       }
 
       // Filter out of stock
-      if (outOfStock === "true") {
+      if (outOfStock === "true" || outOfStock === true) {
         whereClause.stock = 0;
       }
 
       // Get products with pagination
       const { count, rows } = await Product.findAndCountAll({
         where: whereClause,
-        limit: parseInt(limit),
+        limit: limitNum,
         offset: offset,
-        order: [[sortBy, sortOrder.toUpperCase()]],
+        order: [[validSortBy, validSortOrder]],
         include: [
           {
             model: Category,
@@ -73,10 +120,10 @@ class ProductController {
       });
 
       const pagination = {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page: pageNum,
+        limit: limitNum,
         total: count,
-        totalPages: Math.ceil(count / parseInt(limit)),
+        totalPages: Math.ceil(count / limitNum),
       };
 
       return ApiResponse.paginated(res, rows, pagination, "Produk berhasil diambil");
@@ -91,6 +138,11 @@ class ProductController {
   static async getById(req, res, next) {
     try {
       const { id } = req.params;
+
+      // ✅ FIX: Validate ID format
+      if (!id || (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) && !/^\d+$/.test(id))) {
+        return ApiResponse.error(res, "ID produk tidak valid", 400);
+      }
 
       const product = await Product.findByPk(id, {
         include: [
@@ -120,17 +172,24 @@ class ProductController {
 
   // ============================================
   // GET /api/products/barcode/:barcode - Search by barcode
-  // PENTING untuk fitur scanning!
   // ============================================
   static async searchByBarcode(req, res, next) {
     try {
       const { barcode } = req.params;
 
-      if (!barcode) {
+      // ✅ FIX: Validate barcode input
+      if (!barcode || barcode.trim().length === 0) {
         return ApiResponse.error(res, "Barcode harus diisi", 422);
       }
 
-      const product = await Product.findByBarcode(barcode);
+      // ✅ FIX: Sanitize barcode input
+      const sanitizedBarcode = sanitizeLikeInput(barcode);
+
+      if (sanitizedBarcode.length > 50) {
+        return ApiResponse.error(res, "Barcode terlalu panjang", 422);
+      }
+
+      const product = await Product.findByBarcode(sanitizedBarcode);
 
       if (!product) {
         return ApiResponse.notFound(res, "Produk tidak ditemukan");
@@ -149,11 +208,19 @@ class ProductController {
     try {
       const { sku } = req.params;
 
-      if (!sku) {
+      // ✅ FIX: Validate SKU input
+      if (!sku || sku.trim().length === 0) {
         return ApiResponse.error(res, "SKU harus diisi", 422);
       }
 
-      const product = await Product.findBySKU(sku);
+      // ✅ FIX: Sanitize SKU input
+      const sanitizedSKU = sanitizeLikeInput(sku);
+
+      if (sanitizedSKU.length > 50) {
+        return ApiResponse.error(res, "SKU terlalu panjang", 422);
+      }
+
+      const product = await Product.findBySKU(sanitizedSKU);
 
       if (!product) {
         return ApiResponse.notFound(res, "Produk tidak ditemukan");
@@ -198,27 +265,48 @@ class ProductController {
     try {
       const { barcode, name, categoryId, supplierId, unit, purchasePrice, sellingPrice, stock, minStock, description, image } = req.body;
 
-      // Validation
+      // ✅ FIX: Enhanced validation with proper checks
       const errors = {};
 
-      if (!name) {
+      if (!name || name.trim().length === 0) {
         errors.name = ["Nama produk harus diisi"];
+      } else if (name.length < 3) {
+        errors.name = ["Nama produk minimal 3 karakter"];
+      } else if (name.length > 200) {
+        errors.name = ["Nama produk maksimal 200 karakter"];
       }
 
       if (!categoryId) {
         errors.categoryId = ["Kategori harus dipilih"];
       }
 
-      if (!unit) {
+      if (!unit || unit.trim().length === 0) {
         errors.unit = ["Satuan harus diisi"];
+      } else if (unit.length > 20) {
+        errors.unit = ["Satuan maksimal 20 karakter"];
       }
 
-      if (purchasePrice === undefined || purchasePrice < 0) {
-        errors.purchasePrice = ["Harga beli harus diisi dan tidak boleh negatif"];
+      // ✅ FIX: Proper number validation
+      const parsedPurchasePrice = parseFloat(purchasePrice);
+      if (isNaN(parsedPurchasePrice) || parsedPurchasePrice < 0) {
+        errors.purchasePrice = ["Harga beli harus berupa angka dan tidak boleh negatif"];
       }
 
-      if (sellingPrice === undefined || sellingPrice < 0) {
-        errors.sellingPrice = ["Harga jual harus diisi dan tidak boleh negatif"];
+      const parsedSellingPrice = parseFloat(sellingPrice);
+      if (isNaN(parsedSellingPrice) || parsedSellingPrice < 0) {
+        errors.sellingPrice = ["Harga jual harus berupa angka dan tidak boleh negatif"];
+      }
+
+      // ✅ FIX: Validate stock and minStock
+      const parsedStock = parseInt(stock) || 0;
+      const parsedMinStock = parseInt(minStock) || 0;
+
+      if (parsedStock < 0) {
+        errors.stock = ["Stok tidak boleh negatif"];
+      }
+
+      if (parsedMinStock < 0) {
+        errors.minStock = ["Minimum stok tidak boleh negatif"];
       }
 
       if (Object.keys(errors).length > 0) {
@@ -239,9 +327,18 @@ class ProductController {
         }
       }
 
-      // Check if barcode already exists
+      // ✅ FIX: Sanitize barcode before checking
       if (barcode) {
-        const existingBarcode = await Product.findOne({ where: { barcode } });
+        const sanitizedBarcode = barcode.trim();
+
+        if (sanitizedBarcode.length > 50) {
+          return ApiResponse.error(res, "Barcode terlalu panjang (maksimal 50 karakter)", 422);
+        }
+
+        const existingBarcode = await Product.findOne({
+          where: { barcode: sanitizedBarcode },
+        });
+
         if (existingBarcode) {
           return ApiResponse.error(res, "Barcode sudah digunakan", 422, {
             barcode: ["Barcode sudah digunakan"],
@@ -252,20 +349,24 @@ class ProductController {
       // Generate SKU
       const sku = await Product.generateSKU();
 
+      // ✅ FIX: Sanitize description and image
+      const sanitizedDescription = description ? description.trim().substring(0, 1000) : null;
+      const sanitizedImage = image ? image.trim().substring(0, 500) : null;
+
       // Create product
       const product = await Product.create({
-        barcode: barcode || null,
+        barcode: barcode ? barcode.trim() : null,
         sku,
-        name,
+        name: name.trim(),
         categoryId,
         supplierId: supplierId || null,
-        unit,
-        purchasePrice,
-        sellingPrice,
-        stock: stock || 0,
-        minStock: minStock || 0,
-        description,
-        image,
+        unit: unit.trim(),
+        purchasePrice: parsedPurchasePrice,
+        sellingPrice: parsedSellingPrice,
+        stock: parsedStock,
+        minStock: parsedMinStock,
+        description: sanitizedDescription,
+        image: sanitizedImage,
         isActive: true,
       });
 
@@ -301,6 +402,12 @@ class ProductController {
   static async update(req, res, next) {
     try {
       const { id } = req.params;
+
+      // ✅ FIX: Validate ID
+      if (!id || (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) && !/^\d+$/.test(id))) {
+        return ApiResponse.error(res, "ID produk tidak valid", 400);
+      }
+
       const { barcode, name, categoryId, supplierId, unit, purchasePrice, sellingPrice, minStock, description, image, isActive } = req.body;
 
       const product = await Product.findByPk(id);
@@ -309,8 +416,45 @@ class ProductController {
         return ApiResponse.notFound(res, "Produk tidak ditemukan");
       }
 
-      // Validation
+      // ✅ FIX: Enhanced validation
       const errors = {};
+
+      if (name !== undefined) {
+        if (!name || name.trim().length < 3) {
+          errors.name = ["Nama produk minimal 3 karakter"];
+        } else if (name.length > 200) {
+          errors.name = ["Nama produk maksimal 200 karakter"];
+        }
+      }
+
+      if (unit !== undefined) {
+        if (!unit || unit.trim().length === 0) {
+          errors.unit = ["Satuan harus diisi"];
+        } else if (unit.length > 20) {
+          errors.unit = ["Satuan maksimal 20 karakter"];
+        }
+      }
+
+      if (purchasePrice !== undefined) {
+        const parsed = parseFloat(purchasePrice);
+        if (isNaN(parsed) || parsed < 0) {
+          errors.purchasePrice = ["Harga beli harus berupa angka dan tidak boleh negatif"];
+        }
+      }
+
+      if (sellingPrice !== undefined) {
+        const parsed = parseFloat(sellingPrice);
+        if (isNaN(parsed) || parsed < 0) {
+          errors.sellingPrice = ["Harga jual harus berupa angka dan tidak boleh negatif"];
+        }
+      }
+
+      if (minStock !== undefined) {
+        const parsed = parseInt(minStock);
+        if (isNaN(parsed) || parsed < 0) {
+          errors.minStock = ["Minimum stok harus berupa angka dan tidak boleh negatif"];
+        }
+      }
 
       if (categoryId) {
         const category = await Category.findByPk(categoryId);
@@ -326,17 +470,23 @@ class ProductController {
         }
       }
 
-      // Check if new barcode already exists
-      if (barcode && barcode !== product.barcode) {
-        const existingBarcode = await Product.findOne({
-          where: {
-            barcode,
-            id: { [Op.ne]: id },
-          },
-        });
+      // ✅ FIX: Sanitize and validate barcode
+      if (barcode !== undefined && barcode !== product.barcode) {
+        const sanitizedBarcode = barcode ? barcode.trim() : null;
 
-        if (existingBarcode) {
-          errors.barcode = ["Barcode sudah digunakan"];
+        if (sanitizedBarcode && sanitizedBarcode.length > 50) {
+          errors.barcode = ["Barcode terlalu panjang (maksimal 50 karakter)"];
+        } else if (sanitizedBarcode) {
+          const existingBarcode = await Product.findOne({
+            where: {
+              barcode: sanitizedBarcode,
+              id: { [Op.ne]: id },
+            },
+          });
+
+          if (existingBarcode) {
+            errors.barcode = ["Barcode sudah digunakan"];
+          }
         }
       }
 
@@ -344,19 +494,19 @@ class ProductController {
         return ApiResponse.validationError(res, errors, "Data tidak valid");
       }
 
-      // Update product
+      // ✅ FIX: Sanitize all inputs before update
       const updateData = {};
-      if (barcode !== undefined) updateData.barcode = barcode || null;
-      if (name) updateData.name = name;
+      if (barcode !== undefined) updateData.barcode = barcode ? barcode.trim() : null;
+      if (name) updateData.name = name.trim();
       if (categoryId) updateData.categoryId = categoryId;
       if (supplierId !== undefined) updateData.supplierId = supplierId || null;
-      if (unit) updateData.unit = unit;
-      if (purchasePrice !== undefined) updateData.purchasePrice = purchasePrice;
-      if (sellingPrice !== undefined) updateData.sellingPrice = sellingPrice;
-      if (minStock !== undefined) updateData.minStock = minStock;
-      if (description !== undefined) updateData.description = description;
-      if (image !== undefined) updateData.image = image;
-      if (isActive !== undefined) updateData.isActive = isActive;
+      if (unit) updateData.unit = unit.trim();
+      if (purchasePrice !== undefined) updateData.purchasePrice = parseFloat(purchasePrice);
+      if (sellingPrice !== undefined) updateData.sellingPrice = parseFloat(sellingPrice);
+      if (minStock !== undefined) updateData.minStock = parseInt(minStock);
+      if (description !== undefined) updateData.description = description ? description.trim().substring(0, 1000) : null;
+      if (image !== undefined) updateData.image = image ? image.trim().substring(0, 500) : null;
+      if (isActive !== undefined) updateData.isActive = Boolean(isActive);
 
       await product.update(updateData);
 
@@ -393,6 +543,11 @@ class ProductController {
     try {
       const { id } = req.params;
 
+      // ✅ FIX: Validate ID
+      if (!id || (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) && !/^\d+$/.test(id))) {
+        return ApiResponse.error(res, "ID produk tidak valid", 400);
+      }
+
       const product = await Product.findByPk(id);
 
       if (!product) {
@@ -418,6 +573,11 @@ class ProductController {
     try {
       const { id } = req.params;
 
+      // ✅ FIX: Validate ID
+      if (!id || (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) && !/^\d+$/.test(id))) {
+        return ApiResponse.error(res, "ID produk tidak valid", 400);
+      }
+
       const product = await Product.findByPk(id);
 
       if (!product) {
@@ -437,15 +597,21 @@ class ProductController {
 
   // ============================================
   // PATCH /api/products/:id/stock - Update stock manually
-  // (Untuk adjustment cepat, tidak melalui StockAdjustment)
   // ============================================
   static async updateStock(req, res, next) {
     try {
       const { id } = req.params;
       const { stock } = req.body;
 
-      if (stock === undefined || stock < 0) {
-        return ApiResponse.error(res, "Stok harus diisi dan tidak boleh negatif", 422);
+      // ✅ FIX: Validate ID
+      if (!id || (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) && !/^\d+$/.test(id))) {
+        return ApiResponse.error(res, "ID produk tidak valid", 400);
+      }
+
+      // ✅ FIX: Validate stock input
+      const parsedStock = parseInt(stock);
+      if (isNaN(parsedStock) || parsedStock < 0) {
+        return ApiResponse.error(res, "Stok harus berupa angka dan tidak boleh negatif", 422);
       }
 
       const product = await Product.findByPk(id);
@@ -455,9 +621,9 @@ class ProductController {
       }
 
       const oldStock = product.stock;
-      await product.update({ stock });
+      await product.update({ stock: parsedStock });
 
-      console.log(`📦 Stock updated: ${product.sku} - ${oldStock} → ${stock}`);
+      console.log(`📦 Stock updated: ${product.sku} - ${oldStock} → ${parsedStock}`);
 
       return ApiResponse.success(
         res,
@@ -466,7 +632,7 @@ class ProductController {
           sku: product.sku,
           name: product.name,
           oldStock,
-          newStock: stock,
+          newStock: parsedStock,
         },
         "Stok berhasil diupdate"
       );
@@ -487,10 +653,11 @@ class ProductController {
         where: { isActive: false },
       });
 
+      // ✅ FIX: Use proper Sequelize functions instead of raw SQL
       const lowStockProducts = await Product.count({
         where: {
           isActive: true,
-          [Op.or]: [require("sequelize").where(require("sequelize").col("stock"), "<=", require("sequelize").col("min_stock"))],
+          [Op.and]: [where(col("stock"), Op.lte, col("min_stock"))],
         },
       });
 
@@ -507,9 +674,18 @@ class ProductController {
         attributes: ["stock", "purchasePrice", "sellingPrice"],
       });
 
-      const totalStockValue = products.reduce((sum, p) => sum + p.stock * parseFloat(p.purchasePrice), 0);
+      // ✅ FIX: Use reduce with proper type conversion
+      const totalStockValue = products.reduce((sum, p) => {
+        const stock = parseInt(p.stock) || 0;
+        const price = parseFloat(p.purchasePrice) || 0;
+        return sum + stock * price;
+      }, 0);
 
-      const potentialRevenue = products.reduce((sum, p) => sum + p.stock * parseFloat(p.sellingPrice), 0);
+      const potentialRevenue = products.reduce((sum, p) => {
+        const stock = parseInt(p.stock) || 0;
+        const price = parseFloat(p.sellingPrice) || 0;
+        return sum + stock * price;
+      }, 0);
 
       const stats = {
         totalProducts,
@@ -530,22 +706,32 @@ class ProductController {
 
   // ============================================
   // GET /api/products/autocomplete - Autocomplete search
-  // Untuk fitur search dropdown saat transaksi
   // ============================================
   static async autocomplete(req, res, next) {
     try {
       const { query = "", limit = 10 } = req.query;
 
-      if (!query || query.length < 2) {
+      // ✅ FIX: Validate query length
+      if (!query || query.trim().length < 2) {
         return ApiResponse.success(res, [], "Query minimal 2 karakter");
       }
+
+      // ✅ FIX: Sanitize query input
+      const sanitizedQuery = sanitizeLikeInput(query);
+
+      if (sanitizedQuery.length > 100) {
+        return ApiResponse.error(res, "Query terlalu panjang", 422);
+      }
+
+      // ✅ FIX: Validate limit
+      const validLimit = Math.min(50, Math.max(1, parseInt(limit) || 10));
 
       const products = await Product.findAll({
         where: {
           isActive: true,
-          [Op.or]: [{ name: { [Op.like]: `%${query}%` } }, { barcode: { [Op.like]: `%${query}%` } }, { sku: { [Op.like]: `%${query}%` } }],
+          [Op.or]: [{ name: { [Op.like]: `%${sanitizedQuery}%` } }, { barcode: { [Op.like]: `%${sanitizedQuery}%` } }, { sku: { [Op.like]: `%${sanitizedQuery}%` } }],
         },
-        limit: parseInt(limit),
+        limit: validLimit,
         attributes: ["id", "sku", "barcode", "name", "unit", "sellingPrice", "stock"],
         include: [
           {
