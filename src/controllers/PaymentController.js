@@ -11,11 +11,6 @@ const {
   Sale,
   Purchase,
 } = require("../models");
-const SupplierDebt = require("../models/SupplierDebt");
-const Member = require("../models/Member");
-const Supplier = require("../models/Supplier");
-const { Sale } = require("../models/Sale");
-const { Purchase } = require("../models/Purchase");
 const ApiResponse = require("../utils/response");
 const { generatePaymentNumber } = require("../utils/invoiceGenerator");
 const { sequelize } = require("../config/database");

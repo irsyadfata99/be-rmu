@@ -10,10 +10,6 @@ const {
   SupplierDebt,
   StockMovement,
 } = require("../models");
-const Product = require("../models/Product");
-const Supplier = require("../models/Supplier");
-const SupplierDebt = require("../models/SupplierDebt");
-const { StockMovement } = require("../models/StockMovement");
 const ApiResponse = require("../utils/response");
 const { generatePurchaseNumber } = require("../utils/invoiceGenerator");
 const { sequelize } = require("../config/database");

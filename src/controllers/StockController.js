@@ -3,8 +3,6 @@
 // Controller untuk manajemen stock movement & adjustment
 // ============================================
 const { StockMovement, StockAdjustment, Product, User } = require("../models");
-const Product = require("../models/Product");
-const User = require("../models/User");
 const ApiResponse = require("../utils/response");
 const { Op } = require("sequelize");
 

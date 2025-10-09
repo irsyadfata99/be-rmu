@@ -18,14 +18,6 @@ const {
   MemberDebt,
   StockMovement,
 } = require("../models");
-const { Purchase, PurchaseItem } = require("../models/Purchase");
-const { Sale, SaleItem } = require("../models/Sale");
-const Product = require("../models/Product");
-const Supplier = require("../models/Supplier");
-const Member = require("../models/Member");
-const SupplierDebt = require("../models/SupplierDebt");
-const { MemberDebt } = require("../models/MemberDebt");
-const { StockMovement } = require("../models/StockMovement");
 const ApiResponse = require("../utils/response");
 const { sequelize } = require("../config/database");
 const { Op } = require("sequelize");
