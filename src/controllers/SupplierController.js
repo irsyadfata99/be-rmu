@@ -12,14 +12,25 @@ class SupplierController {
   // ============================================
   static async getAll(req, res, next) {
     try {
-      const { page = 1, limit = 10, search = "", isActive, sortBy = "createdAt", sortOrder = "DESC" } = req.query;
+      const {
+        page = 1,
+        limit = 10,
+        search = "",
+        isActive,
+        sortBy = "createdAt",
+        sortOrder = "DESC",
+      } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const whereClause = {};
 
       // Search by name or code
       if (search) {
-        whereClause[Op.or] = [{ name: { [Op.like]: `%${search}%` } }, { code: { [Op.like]: `%${search}%` } }, { contactPerson: { [Op.like]: `%${search}%` } }];
+        whereClause[Op.or] = [
+          { name: { [Op.like]: `%${search}%` } },
+          { code: { [Op.like]: `%${search}%` } },
+          { contactPerson: { [Op.like]: `%${search}%` } },
+        ];
       }
 
       // Filter by active status
@@ -41,7 +52,12 @@ class SupplierController {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
 
-      return ApiResponse.paginated(res, rows, pagination, "Supplier berhasil diambil");
+      return ApiResponse.paginated(
+        res,
+        rows,
+        pagination,
+        "Supplier berhasil diambil"
+      );
     } catch (error) {
       next(error);
     }
@@ -61,7 +77,10 @@ class SupplierController {
       const suppliers = await Supplier.findAll({
         where: {
           isActive: true,
-          [Op.or]: [{ name: { [Op.like]: `%${query}%` } }, { code: { [Op.like]: `%${query}%` } }],
+          [Op.or]: [
+            { name: { [Op.like]: `%${query}%` } },
+            { code: { [Op.like]: `%${query}%` } },
+          ],
         },
         limit: parseInt(limit),
         attributes: ["id", "code", "name", "phone", "contactPerson"],
@@ -78,7 +97,11 @@ class SupplierController {
         value: s.id,
       }));
 
-      return ApiResponse.success(res, formatted, `Ditemukan ${formatted.length} supplier`);
+      return ApiResponse.success(
+        res,
+        formatted,
+        `Ditemukan ${formatted.length} supplier`
+      );
     } catch (error) {
       next(error);
     }
@@ -127,29 +150,62 @@ class SupplierController {
   // ============================================
   static async create(req, res, next) {
     try {
-      const { name, address, phone, contactPerson, email, description } = req.body;
+      const { name, address, phone, contactPerson, email, description } =
+        req.body;
 
       // Validation
       const errors = {};
 
-      // NEW (add max length check):
-      if (!name) {
+      // Validate name
+      if (!name || name.trim() === "") {
         errors.name = ["Nama supplier harus diisi"];
       } else if (name.length < 3) {
         errors.name = ["Nama supplier minimal 3 karakter"];
       } else if (name.length > 100) {
-        // ← NEW!
         errors.name = ["Nama supplier maksimal 100 karakter"];
       }
 
-      // Also in update() method (line 151-154):
-      if (name && name.length < 3) {
-        errors.name = ["Nama supplier minimal 3 karakter"];
-      } else if (name && name.length > 100) {
-        // ← NEW!
-        errors.name = ["Nama supplier maksimal 100 karakter"];
+      // Validate address
+      if (!address || address.trim() === "") {
+        errors.address = ["Alamat harus diisi"];
+      } else if (address.length < 10) {
+        errors.address = ["Alamat minimal 10 karakter"];
+      } else if (address.length > 255) {
+        errors.address = ["Alamat maksimal 255 karakter"];
       }
 
+      // Validate phone
+      if (!phone || phone.trim() === "") {
+        errors.phone = ["Nomor telepon harus diisi"];
+      } else if (!/^08\d{8,11}$/.test(phone)) {
+        errors.phone = [
+          "Format nomor telepon tidak valid (contoh: 081234567890)",
+        ];
+      }
+
+      // Validate contactPerson (optional)
+      if (contactPerson && contactPerson.length > 0) {
+        if (contactPerson.length < 3) {
+          errors.contactPerson = ["Nama kontak minimal 3 karakter"];
+        } else if (contactPerson.length > 100) {
+          errors.contactPerson = ["Nama kontak maksimal 100 karakter"];
+        }
+      }
+
+      // Validate email (optional)
+      if (email && email.length > 0) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          errors.email = ["Format email tidak valid"];
+        }
+      }
+
+      // Validate description (optional)
+      if (description && description.length > 500) {
+        errors.description = ["Deskripsi maksimal 500 karakter"];
+      }
+
+      // Return validation errors if any
       if (Object.keys(errors).length > 0) {
         return ApiResponse.validationError(res, errors, "Data tidak valid");
       }
@@ -157,9 +213,11 @@ class SupplierController {
       // Check if name already exists
       const existingName = await Supplier.findOne({ where: { name } });
       if (existingName) {
-        return ApiResponse.error(res, "Nama supplier sudah digunakan", 422, {
-          name: ["Nama supplier sudah digunakan"],
-        });
+        return ApiResponse.validationError(
+          res,
+          { name: ["Nama supplier sudah digunakan"] },
+          "Nama supplier sudah digunakan"
+        );
       }
 
       // Generate code
@@ -168,12 +226,12 @@ class SupplierController {
       // Create supplier
       const supplier = await Supplier.create({
         code,
-        name,
-        address,
-        phone,
-        contactPerson,
-        email,
-        description,
+        name: name.trim(),
+        address: address.trim(),
+        phone: phone.trim(),
+        contactPerson: contactPerson?.trim() || null,
+        email: email?.trim() || null,
+        description: description?.trim() || null,
         totalDebt: 0,
         totalPurchases: 0,
         isActive: true,
@@ -194,7 +252,15 @@ class SupplierController {
   static async update(req, res, next) {
     try {
       const { id } = req.params;
-      const { name, address, phone, contactPerson, email, description, isActive } = req.body;
+      const {
+        name,
+        address,
+        phone,
+        contactPerson,
+        email,
+        description,
+        isActive,
+      } = req.body;
 
       const supplier = await Supplier.findByPk(id);
 
@@ -205,10 +271,60 @@ class SupplierController {
       // Validation
       const errors = {};
 
-      if (name && name.length < 3) {
-        errors.name = ["Nama supplier minimal 3 karakter"];
+      // Validate name (if provided)
+      if (name !== undefined) {
+        if (name.trim() === "") {
+          errors.name = ["Nama supplier harus diisi"];
+        } else if (name.length < 3) {
+          errors.name = ["Nama supplier minimal 3 karakter"];
+        } else if (name.length > 100) {
+          errors.name = ["Nama supplier maksimal 100 karakter"];
+        }
       }
 
+      // Validate address (if provided)
+      if (address !== undefined) {
+        if (address.trim() === "") {
+          errors.address = ["Alamat harus diisi"];
+        } else if (address.length < 10) {
+          errors.address = ["Alamat minimal 10 karakter"];
+        } else if (address.length > 255) {
+          errors.address = ["Alamat maksimal 255 karakter"];
+        }
+      }
+
+      // Validate phone (if provided)
+      if (phone !== undefined) {
+        if (phone.trim() === "") {
+          errors.phone = ["Nomor telepon harus diisi"];
+        } else if (!/^08\d{8,11}$/.test(phone)) {
+          errors.phone = ["Format nomor telepon tidak valid"];
+        }
+      }
+
+      // Validate contactPerson (if provided)
+      if (contactPerson && contactPerson.length > 0) {
+        if (contactPerson.length < 3) {
+          errors.contactPerson = ["Nama kontak minimal 3 karakter"];
+        } else if (contactPerson.length > 100) {
+          errors.contactPerson = ["Nama kontak maksimal 100 karakter"];
+        }
+      }
+
+      // Validate email (if provided)
+      if (email && email.length > 0) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          errors.email = ["Format email tidak valid"];
+        }
+      }
+
+      // Validate description (if provided)
+      if (description && description.length > 500) {
+        errors.description = ["Deskripsi maksimal 500 karakter"];
+      }
+
+      // Return validation errors if any
       if (Object.keys(errors).length > 0) {
         return ApiResponse.validationError(res, errors, "Data tidak valid");
       }
@@ -223,20 +339,24 @@ class SupplierController {
         });
 
         if (existingName) {
-          return ApiResponse.error(res, "Nama supplier sudah digunakan", 422, {
-            name: ["Nama supplier sudah digunakan"],
-          });
+          return ApiResponse.validationError(
+            res,
+            { name: ["Nama supplier sudah digunakan"] },
+            "Nama supplier sudah digunakan"
+          );
         }
       }
 
       // Update supplier
       const updateData = {};
-      if (name) updateData.name = name;
-      if (address !== undefined) updateData.address = address;
-      if (phone !== undefined) updateData.phone = phone;
-      if (contactPerson !== undefined) updateData.contactPerson = contactPerson;
-      if (email !== undefined) updateData.email = email;
-      if (description !== undefined) updateData.description = description;
+      if (name !== undefined) updateData.name = name.trim();
+      if (address !== undefined) updateData.address = address.trim();
+      if (phone !== undefined) updateData.phone = phone.trim();
+      if (contactPerson !== undefined)
+        updateData.contactPerson = contactPerson?.trim() || null;
+      if (email !== undefined) updateData.email = email?.trim() || null;
+      if (description !== undefined)
+        updateData.description = description?.trim() || null;
       if (isActive !== undefined) updateData.isActive = isActive;
 
       await supplier.update(updateData);
@@ -266,9 +386,15 @@ class SupplierController {
       // Soft delete - set isActive to false
       await supplier.update({ isActive: false });
 
-      console.log(`🗑️ Supplier deactivated: ${supplier.code} - ${supplier.name}`);
+      console.log(
+        `🗑️ Supplier deactivated: ${supplier.code} - ${supplier.name}`
+      );
 
-      return ApiResponse.success(res, { id: supplier.id }, "Supplier berhasil dinonaktifkan");
+      return ApiResponse.success(
+        res,
+        { id: supplier.id },
+        "Supplier berhasil dinonaktifkan"
+      );
     } catch (error) {
       console.error("❌ Error deleting supplier:", error);
       next(error);
@@ -290,9 +416,19 @@ class SupplierController {
 
       await supplier.update({ isActive: !supplier.isActive });
 
-      console.log(`🔄 Supplier ${supplier.isActive ? "activated" : "deactivated"}: ${supplier.code} - ${supplier.name}`);
+      console.log(
+        `🔄 Supplier ${supplier.isActive ? "activated" : "deactivated"}: ${
+          supplier.code
+        } - ${supplier.name}`
+      );
 
-      return ApiResponse.success(res, supplier, `Supplier berhasil ${supplier.isActive ? "diaktifkan" : "dinonaktifkan"}`);
+      return ApiResponse.success(
+        res,
+        supplier,
+        `Supplier berhasil ${
+          supplier.isActive ? "diaktifkan" : "dinonaktifkan"
+        }`
+      );
     } catch (error) {
       console.error("❌ Error toggling supplier status:", error);
       next(error);
@@ -305,8 +441,12 @@ class SupplierController {
   static async getStats(req, res, next) {
     try {
       const totalSuppliers = await Supplier.count();
-      const activeSuppliers = await Supplier.count({ where: { isActive: true } });
-      const inactiveSuppliers = await Supplier.count({ where: { isActive: false } });
+      const activeSuppliers = await Supplier.count({
+        where: { isActive: true },
+      });
+      const inactiveSuppliers = await Supplier.count({
+        where: { isActive: false },
+      });
 
       // Suppliers with debt
       const suppliersWithDebt = await Supplier.count({
@@ -326,7 +466,11 @@ class SupplierController {
         totalDebt: parseFloat(totalDebt || 0).toFixed(2),
       };
 
-      return ApiResponse.success(res, stats, "Statistik supplier berhasil diambil");
+      return ApiResponse.success(
+        res,
+        stats,
+        "Statistik supplier berhasil diambil"
+      );
     } catch (error) {
       next(error);
     }

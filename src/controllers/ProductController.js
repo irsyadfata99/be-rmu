@@ -45,7 +45,18 @@ class ProductController {
   // ============================================
   static async getAll(req, res, next) {
     try {
-      const { page = 1, limit = 10, search = "", categoryId, supplierId, isActive, lowStock = false, outOfStock = false, sortBy = "createdAt", sortOrder = "DESC" } = req.query;
+      const {
+        page = 1,
+        limit = 10,
+        search = "",
+        categoryId,
+        supplierId,
+        isActive,
+        lowStock = false,
+        outOfStock = false,
+        sortBy = "createdAt",
+        sortOrder = "DESC",
+      } = req.query;
 
       // ✅ FIX: Validate and sanitize inputs
       const pageNum = Math.max(1, parseInt(page) || 1);
@@ -53,7 +64,16 @@ class ProductController {
       const offset = (pageNum - 1) * limitNum;
 
       // ✅ FIX: Validate sort parameters
-      const allowedSortFields = ["createdAt", "updatedAt", "name", "sku", "barcode", "stock", "sellingPrice", "purchasePrice"];
+      const allowedSortFields = [
+        "createdAt",
+        "updatedAt",
+        "name",
+        "sku",
+        "barcode",
+        "stock",
+        "sellingPrice",
+        "purchasePrice",
+      ];
       const validSortBy = validateSortField(sortBy, allowedSortFields);
       const validSortOrder = validateSortOrder(sortOrder);
 
@@ -63,20 +83,34 @@ class ProductController {
       // ✅ FIX: Sanitize search input to prevent SQL injection
       if (search) {
         const sanitizedSearch = sanitizeLikeInput(search);
-        whereClause[Op.or] = [{ name: { [Op.like]: `%${sanitizedSearch}%` } }, { barcode: { [Op.like]: `%${sanitizedSearch}%` } }, { sku: { [Op.like]: `%${sanitizedSearch}%` } }];
+        whereClause[Op.or] = [
+          { name: { [Op.like]: `%${sanitizedSearch}%` } },
+          { barcode: { [Op.like]: `%${sanitizedSearch}%` } },
+          { sku: { [Op.like]: `%${sanitizedSearch}%` } },
+        ];
       }
 
       // ✅ FIX: Validate categoryId is a valid UUID/number
       if (categoryId) {
         // Check if it's a valid ID format (UUID or number)
-        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(categoryId) || /^\d+$/.test(categoryId)) {
+        if (
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            categoryId
+          ) ||
+          /^\d+$/.test(categoryId)
+        ) {
           whereClause.categoryId = categoryId;
         }
       }
 
       // ✅ FIX: Validate supplierId
       if (supplierId) {
-        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(supplierId) || /^\d+$/.test(supplierId)) {
+        if (
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            supplierId
+          ) ||
+          /^\d+$/.test(supplierId)
+        ) {
           whereClause.supplierId = supplierId;
         }
       }
@@ -126,7 +160,12 @@ class ProductController {
         totalPages: Math.ceil(count / limitNum),
       };
 
-      return ApiResponse.paginated(res, rows, pagination, "Produk berhasil diambil");
+      return ApiResponse.paginated(
+        res,
+        rows,
+        pagination,
+        "Produk berhasil diambil"
+      );
     } catch (error) {
       next(error);
     }
@@ -140,7 +179,13 @@ class ProductController {
       const { id } = req.params;
 
       // ✅ FIX: Validate ID format
-      if (!id || (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) && !/^\d+$/.test(id))) {
+      if (
+        !id ||
+        (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          id
+        ) &&
+          !/^\d+$/.test(id))
+      ) {
         return ApiResponse.error(res, "ID produk tidak valid", 400);
       }
 
@@ -239,7 +284,11 @@ class ProductController {
     try {
       const products = await Product.getLowStock();
 
-      return ApiResponse.success(res, products, `Ditemukan ${products.length} produk dengan stok menipis`);
+      return ApiResponse.success(
+        res,
+        products,
+        `Ditemukan ${products.length} produk dengan stok menipis`
+      );
     } catch (error) {
       next(error);
     }
@@ -252,7 +301,11 @@ class ProductController {
     try {
       const products = await Product.getOutOfStock();
 
-      return ApiResponse.success(res, products, `Ditemukan ${products.length} produk yang habis`);
+      return ApiResponse.success(
+        res,
+        products,
+        `Ditemukan ${products.length} produk yang habis`
+      );
     } catch (error) {
       next(error);
     }
@@ -261,112 +314,192 @@ class ProductController {
   // ============================================
   // POST /api/products - Create new product
   // ============================================
+  // POST /api/products - Create new product
   static async create(req, res, next) {
     try {
-      const { barcode, name, categoryId, supplierId, unit, purchasePrice, sellingPrice, stock, minStock, description, image } = req.body;
+      const {
+        barcode,
+        name,
+        categoryId,
+        supplierId,
+        productType,
+        purchaseType,
+        invoiceNo,
+        expiryDate,
+        description,
+        unit,
+        purchasePrice,
+        sellingPriceGeneral,
+        sellingPriceMember,
+        points,
+        stock,
+        minStock,
+        maxStock,
+      } = req.body;
 
-      // ✅ FIX: Enhanced validation with proper checks
+      // ✅ LENGKAPI VALIDASI SESUAI FRONTEND SCHEMA
       const errors = {};
 
+      // Validate name (REQUIRED)
       if (!name || name.trim().length === 0) {
-        errors.name = ["Nama produk harus diisi"];
+        errors.name = ["Nama barang harus diisi"];
       } else if (name.length < 3) {
-        errors.name = ["Nama produk minimal 3 karakter"];
-      } else if (name.length > 200) {
-        errors.name = ["Nama produk maksimal 200 karakter"];
+        errors.name = ["Nama barang minimal 3 karakter"];
+      } else if (name.length > 100) {
+        errors.name = ["Nama barang maksimal 100 karakter"];
       }
 
-      if (!categoryId) {
+      // Validate categoryId (REQUIRED)
+      if (!categoryId || categoryId.trim() === "") {
         errors.categoryId = ["Kategori harus dipilih"];
       }
 
+      // Validate supplierId (REQUIRED)
+      if (!supplierId || supplierId.trim() === "") {
+        errors.supplierId = ["Supplier harus dipilih"];
+      }
+
+      // Validate productType (REQUIRED)
+      if (!productType) {
+        errors.productType = ["Jenis barang harus dipilih"];
+      } else if (!["Tunai", "Beli Putus", "Konsinyasi"].includes(productType)) {
+        errors.productType = ["Jenis barang tidak valid"];
+      }
+
+      // Validate purchaseType (REQUIRED)
+      if (!purchaseType) {
+        errors.purchaseType = ["Jenis pembelian harus dipilih"];
+      } else if (!["Cash", "Hutang"].includes(purchaseType)) {
+        errors.purchaseType = ["Jenis pembelian tidak valid"];
+      }
+
+      // Validate unit (REQUIRED)
       if (!unit || unit.trim().length === 0) {
         errors.unit = ["Satuan harus diisi"];
       } else if (unit.length > 20) {
         errors.unit = ["Satuan maksimal 20 karakter"];
       }
 
-      // ✅ FIX: Proper number validation
+      // Validate barcode (REQUIRED)
+      if (!barcode || barcode.trim().length === 0) {
+        errors.barcode = ["Barcode harus diisi"];
+      } else if (barcode.length < 3) {
+        errors.barcode = ["Barcode minimal 3 karakter"];
+      } else if (barcode.length > 50) {
+        errors.barcode = ["Barcode maksimal 50 karakter"];
+      }
+
+      // Validate prices (REQUIRED)
       const parsedPurchasePrice = parseFloat(purchasePrice);
-      if (isNaN(parsedPurchasePrice) || parsedPurchasePrice < 0) {
-        errors.purchasePrice = ["Harga beli harus berupa angka dan tidak boleh negatif"];
+      if (isNaN(parsedPurchasePrice) || parsedPurchasePrice <= 0) {
+        errors.purchasePrice = ["Harga beli harus lebih dari 0"];
       }
 
-      const parsedSellingPrice = parseFloat(sellingPrice);
-      if (isNaN(parsedSellingPrice) || parsedSellingPrice < 0) {
-        errors.sellingPrice = ["Harga jual harus berupa angka dan tidak boleh negatif"];
+      const parsedSellingPriceGeneral = parseFloat(sellingPriceGeneral);
+      if (isNaN(parsedSellingPriceGeneral) || parsedSellingPriceGeneral <= 0) {
+        errors.sellingPriceGeneral = ["Harga jual umum harus lebih dari 0"];
       }
 
-      // ✅ FIX: Validate stock and minStock
+      const parsedSellingPriceMember = parseFloat(sellingPriceMember);
+      if (isNaN(parsedSellingPriceMember) || parsedSellingPriceMember <= 0) {
+        errors.sellingPriceMember = ["Harga jual anggota harus lebih dari 0"];
+      }
+
+      // Validate stock values
       const parsedStock = parseInt(stock) || 0;
       const parsedMinStock = parseInt(minStock) || 0;
+      const parsedMaxStock = parseInt(maxStock) || 0;
+      const parsedPoints = parseInt(points) || 0;
 
       if (parsedStock < 0) {
         errors.stock = ["Stok tidak boleh negatif"];
       }
 
       if (parsedMinStock < 0) {
-        errors.minStock = ["Minimum stok tidak boleh negatif"];
+        errors.minStock = ["Stok minimum tidak boleh negatif"];
       }
 
+      if (parsedMaxStock < 0) {
+        errors.maxStock = ["Stok maksimum tidak boleh negatif"];
+      }
+
+      if (parsedPoints < 0) {
+        errors.points = ["Point tidak boleh negatif"];
+      }
+
+      // Validate optional fields
+      if (invoiceNo && invoiceNo.length > 50) {
+        errors.invoiceNo = ["Invoice maksimal 50 karakter"];
+      }
+
+      if (description && description.length > 255) {
+        errors.description = ["Deskripsi maksimal 255 karakter"];
+      }
+
+      // Return validation errors if any
       if (Object.keys(errors).length > 0) {
+        console.log("❌ Validation errors:", errors);
         return ApiResponse.validationError(res, errors, "Data tidak valid");
       }
 
       // Check if category exists
       const category = await Category.findByPk(categoryId);
       if (!category) {
-        return ApiResponse.error(res, "Kategori tidak ditemukan", 404);
+        return ApiResponse.validationError(
+          res,
+          { categoryId: ["Kategori tidak ditemukan"] },
+          "Kategori tidak ditemukan"
+        );
       }
 
-      // Check if supplier exists (if provided)
-      if (supplierId) {
-        const supplier = await Supplier.findByPk(supplierId);
-        if (!supplier) {
-          return ApiResponse.error(res, "Supplier tidak ditemukan", 404);
-        }
+      // Check if supplier exists
+      const supplier = await Supplier.findByPk(supplierId);
+      if (!supplier) {
+        return ApiResponse.validationError(
+          res,
+          { supplierId: ["Supplier tidak ditemukan"] },
+          "Supplier tidak ditemukan"
+        );
       }
 
-      // ✅ FIX: Sanitize barcode before checking
-      if (barcode) {
-        const sanitizedBarcode = barcode.trim();
+      // Check if barcode already exists
+      const sanitizedBarcode = barcode.trim();
+      const existingBarcode = await Product.findOne({
+        where: { barcode: sanitizedBarcode },
+      });
 
-        if (sanitizedBarcode.length > 50) {
-          return ApiResponse.error(res, "Barcode terlalu panjang (maksimal 50 karakter)", 422);
-        }
-
-        const existingBarcode = await Product.findOne({
-          where: { barcode: sanitizedBarcode },
-        });
-
-        if (existingBarcode) {
-          return ApiResponse.error(res, "Barcode sudah digunakan", 422, {
-            barcode: ["Barcode sudah digunakan"],
-          });
-        }
+      if (existingBarcode) {
+        return ApiResponse.validationError(
+          res,
+          { barcode: ["Barcode sudah digunakan"] },
+          "Barcode sudah digunakan"
+        );
       }
 
       // Generate SKU
       const sku = await Product.generateSKU();
 
-      // ✅ FIX: Sanitize description and image
-      const sanitizedDescription = description ? description.trim().substring(0, 1000) : null;
-      const sanitizedImage = image ? image.trim().substring(0, 500) : null;
-
       // Create product
       const product = await Product.create({
-        barcode: barcode ? barcode.trim() : null,
+        barcode: sanitizedBarcode,
         sku,
         name: name.trim(),
         categoryId,
-        supplierId: supplierId || null,
+        supplierId,
+        productType,
+        purchaseType,
+        invoiceNo: invoiceNo?.trim() || null,
+        expiryDate: expiryDate || null,
+        description: description?.trim() || null,
         unit: unit.trim(),
         purchasePrice: parsedPurchasePrice,
-        sellingPrice: parsedSellingPrice,
+        sellingPriceGeneral: parsedSellingPriceGeneral,
+        sellingPriceMember: parsedSellingPriceMember,
+        sellingPrice: parsedSellingPriceGeneral, // Default to general price
+        points: parsedPoints,
         stock: parsedStock,
         minStock: parsedMinStock,
-        description: sanitizedDescription,
-        image: sanitizedImage,
+        maxStock: parsedMaxStock,
         isActive: true,
       });
 
@@ -404,11 +537,29 @@ class ProductController {
       const { id } = req.params;
 
       // ✅ FIX: Validate ID
-      if (!id || (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) && !/^\d+$/.test(id))) {
+      if (
+        !id ||
+        (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          id
+        ) &&
+          !/^\d+$/.test(id))
+      ) {
         return ApiResponse.error(res, "ID produk tidak valid", 400);
       }
 
-      const { barcode, name, categoryId, supplierId, unit, purchasePrice, sellingPrice, minStock, description, image, isActive } = req.body;
+      const {
+        barcode,
+        name,
+        categoryId,
+        supplierId,
+        unit,
+        purchasePrice,
+        sellingPrice,
+        minStock,
+        description,
+        image,
+        isActive,
+      } = req.body;
 
       const product = await Product.findByPk(id);
 
@@ -438,21 +589,27 @@ class ProductController {
       if (purchasePrice !== undefined) {
         const parsed = parseFloat(purchasePrice);
         if (isNaN(parsed) || parsed < 0) {
-          errors.purchasePrice = ["Harga beli harus berupa angka dan tidak boleh negatif"];
+          errors.purchasePrice = [
+            "Harga beli harus berupa angka dan tidak boleh negatif",
+          ];
         }
       }
 
       if (sellingPrice !== undefined) {
         const parsed = parseFloat(sellingPrice);
         if (isNaN(parsed) || parsed < 0) {
-          errors.sellingPrice = ["Harga jual harus berupa angka dan tidak boleh negatif"];
+          errors.sellingPrice = [
+            "Harga jual harus berupa angka dan tidak boleh negatif",
+          ];
         }
       }
 
       if (minStock !== undefined) {
         const parsed = parseInt(minStock);
         if (isNaN(parsed) || parsed < 0) {
-          errors.minStock = ["Minimum stok harus berupa angka dan tidak boleh negatif"];
+          errors.minStock = [
+            "Minimum stok harus berupa angka dan tidak boleh negatif",
+          ];
         }
       }
 
@@ -496,16 +653,23 @@ class ProductController {
 
       // ✅ FIX: Sanitize all inputs before update
       const updateData = {};
-      if (barcode !== undefined) updateData.barcode = barcode ? barcode.trim() : null;
+      if (barcode !== undefined)
+        updateData.barcode = barcode ? barcode.trim() : null;
       if (name) updateData.name = name.trim();
       if (categoryId) updateData.categoryId = categoryId;
       if (supplierId !== undefined) updateData.supplierId = supplierId || null;
       if (unit) updateData.unit = unit.trim();
-      if (purchasePrice !== undefined) updateData.purchasePrice = parseFloat(purchasePrice);
-      if (sellingPrice !== undefined) updateData.sellingPrice = parseFloat(sellingPrice);
+      if (purchasePrice !== undefined)
+        updateData.purchasePrice = parseFloat(purchasePrice);
+      if (sellingPrice !== undefined)
+        updateData.sellingPrice = parseFloat(sellingPrice);
       if (minStock !== undefined) updateData.minStock = parseInt(minStock);
-      if (description !== undefined) updateData.description = description ? description.trim().substring(0, 1000) : null;
-      if (image !== undefined) updateData.image = image ? image.trim().substring(0, 500) : null;
+      if (description !== undefined)
+        updateData.description = description
+          ? description.trim().substring(0, 1000)
+          : null;
+      if (image !== undefined)
+        updateData.image = image ? image.trim().substring(0, 500) : null;
       if (isActive !== undefined) updateData.isActive = Boolean(isActive);
 
       await product.update(updateData);
@@ -544,7 +708,13 @@ class ProductController {
       const { id } = req.params;
 
       // ✅ FIX: Validate ID
-      if (!id || (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) && !/^\d+$/.test(id))) {
+      if (
+        !id ||
+        (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          id
+        ) &&
+          !/^\d+$/.test(id))
+      ) {
         return ApiResponse.error(res, "ID produk tidak valid", 400);
       }
 
@@ -559,7 +729,11 @@ class ProductController {
 
       console.log(`🗑️ Product deactivated: ${product.sku} - ${product.name}`);
 
-      return ApiResponse.success(res, { id: product.id }, "Produk berhasil dinonaktifkan");
+      return ApiResponse.success(
+        res,
+        { id: product.id },
+        "Produk berhasil dinonaktifkan"
+      );
     } catch (error) {
       console.error("❌ Error deleting product:", error);
       next(error);
@@ -574,7 +748,13 @@ class ProductController {
       const { id } = req.params;
 
       // ✅ FIX: Validate ID
-      if (!id || (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) && !/^\d+$/.test(id))) {
+      if (
+        !id ||
+        (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          id
+        ) &&
+          !/^\d+$/.test(id))
+      ) {
         return ApiResponse.error(res, "ID produk tidak valid", 400);
       }
 
@@ -586,9 +766,17 @@ class ProductController {
 
       await product.update({ isActive: !product.isActive });
 
-      console.log(`🔄 Product ${product.isActive ? "activated" : "deactivated"}: ${product.sku} - ${product.name}`);
+      console.log(
+        `🔄 Product ${product.isActive ? "activated" : "deactivated"}: ${
+          product.sku
+        } - ${product.name}`
+      );
 
-      return ApiResponse.success(res, product, `Produk berhasil ${product.isActive ? "diaktifkan" : "dinonaktifkan"}`);
+      return ApiResponse.success(
+        res,
+        product,
+        `Produk berhasil ${product.isActive ? "diaktifkan" : "dinonaktifkan"}`
+      );
     } catch (error) {
       console.error("❌ Error toggling product status:", error);
       next(error);
@@ -604,14 +792,24 @@ class ProductController {
       const { stock } = req.body;
 
       // ✅ FIX: Validate ID
-      if (!id || (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) && !/^\d+$/.test(id))) {
+      if (
+        !id ||
+        (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          id
+        ) &&
+          !/^\d+$/.test(id))
+      ) {
         return ApiResponse.error(res, "ID produk tidak valid", 400);
       }
 
       // ✅ FIX: Validate stock input
       const parsedStock = parseInt(stock);
       if (isNaN(parsedStock) || parsedStock < 0) {
-        return ApiResponse.error(res, "Stok harus berupa angka dan tidak boleh negatif", 422);
+        return ApiResponse.error(
+          res,
+          "Stok harus berupa angka dan tidak boleh negatif",
+          422
+        );
       }
 
       const product = await Product.findByPk(id);
@@ -623,7 +821,9 @@ class ProductController {
       const oldStock = product.stock;
       await product.update({ stock: parsedStock });
 
-      console.log(`📦 Stock updated: ${product.sku} - ${oldStock} → ${parsedStock}`);
+      console.log(
+        `📦 Stock updated: ${product.sku} - ${oldStock} → ${parsedStock}`
+      );
 
       return ApiResponse.success(
         res,
@@ -697,7 +897,11 @@ class ProductController {
         potentialRevenue: parseFloat(potentialRevenue.toFixed(2)),
       };
 
-      return ApiResponse.success(res, stats, "Statistik produk berhasil diambil");
+      return ApiResponse.success(
+        res,
+        stats,
+        "Statistik produk berhasil diambil"
+      );
     } catch (error) {
       console.error("❌ Error getting product stats:", error);
       next(error);
@@ -729,10 +933,22 @@ class ProductController {
       const products = await Product.findAll({
         where: {
           isActive: true,
-          [Op.or]: [{ name: { [Op.like]: `%${sanitizedQuery}%` } }, { barcode: { [Op.like]: `%${sanitizedQuery}%` } }, { sku: { [Op.like]: `%${sanitizedQuery}%` } }],
+          [Op.or]: [
+            { name: { [Op.like]: `%${sanitizedQuery}%` } },
+            { barcode: { [Op.like]: `%${sanitizedQuery}%` } },
+            { sku: { [Op.like]: `%${sanitizedQuery}%` } },
+          ],
         },
         limit: validLimit,
-        attributes: ["id", "sku", "barcode", "name", "unit", "sellingPrice", "stock"],
+        attributes: [
+          "id",
+          "sku",
+          "barcode",
+          "name",
+          "unit",
+          "sellingPrice",
+          "stock",
+        ],
         include: [
           {
             model: Category,
@@ -752,11 +968,17 @@ class ProductController {
         price: parseFloat(p.sellingPrice),
         stock: p.stock,
         category: p.category?.name,
-        label: `${p.name} (${p.unit}) - Rp ${parseFloat(p.sellingPrice).toLocaleString("id-ID")}`,
+        label: `${p.name} (${p.unit}) - Rp ${parseFloat(
+          p.sellingPrice
+        ).toLocaleString("id-ID")}`,
         value: p.id,
       }));
 
-      return ApiResponse.success(res, formatted, `Ditemukan ${formatted.length} produk`);
+      return ApiResponse.success(
+        res,
+        formatted,
+        `Ditemukan ${formatted.length} produk`
+      );
     } catch (error) {
       console.error("❌ Error autocomplete:", error);
       next(error);
