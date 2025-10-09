@@ -138,7 +138,7 @@ class SaleController {
       }
 
       // ===== GENERATE INVOICE NUMBER =====
-      const invoiceNumber = await generateInvoiceNumber(saleType);
+      const invoiceNumber = await generateInvoiceNumber(saleType, new Date(), t);
 
       // ===== CREATE SALE =====
       const sale = await Sale.create(

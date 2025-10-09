@@ -1,0 +1,4 @@
+# Logs
+src/logs/*.log
+logs/
+*.log
