@@ -1,99 +1,114 @@
 // ============================================
-// src/routes/returnRoutes.js
-// Routes untuk Purchase Return & Sales Return
+// src/routes/returnRoutes.js (WITH VALIDATIONS)
 // ============================================
 const express = require("express");
 const router = express.Router();
 const ReturnController = require("../controllers/ReturnController");
 const { authenticate, authorize } = require("../middlewares/auth");
+const {
+  createPurchaseReturnSchema,
+  createSalesReturnSchema,
+  approveReturnSchema,
+  rejectReturnSchema,
+  validate,
+} = require("../validations/returnValidation");
 
 // ============================================
 // STATISTICS
 // ============================================
-
-/**
- * @route   GET /api/returns/stats
- * @desc    Get return statistics
- * @access  Private (ADMIN, KASIR)
- */
-router.get("/stats", authenticate, authorize(["ADMIN", "KASIR"]), ReturnController.getStats);
-
-// ============================================
-// PURCHASE RETURNS (RETUR KE SUPPLIER)
-// ============================================
-
-/**
- * @route   GET /api/returns/purchases
- * @desc    Get all purchase returns with pagination
- * @access  Private (ADMIN, KASIR)
- */
-router.get("/purchases", authenticate, authorize(["ADMIN", "KASIR"]), ReturnController.getPurchaseReturns);
-
-/**
- * @route   GET /api/returns/purchases/:id
- * @desc    Get purchase return detail by ID
- * @access  Private (ADMIN, KASIR)
- */
-router.get("/purchases/:id", authenticate, authorize(["ADMIN", "KASIR"]), ReturnController.getPurchaseReturnById);
-
-/**
- * @route   POST /api/returns/purchases
- * @desc    Create new purchase return (retur ke supplier)
- * @access  Private (ADMIN, KASIR)
- */
-router.post("/purchases", authenticate, authorize(["ADMIN", "KASIR"]), ReturnController.createPurchaseReturn);
-
-/**
- * @route   PATCH /api/returns/purchases/:id/approve
- * @desc    Approve purchase return (ADMIN only)
- * @access  Private (ADMIN)
- */
-router.patch("/purchases/:id/approve", authenticate, authorize(["ADMIN"]), ReturnController.approvePurchaseReturn);
-
-/**
- * @route   PATCH /api/returns/purchases/:id/reject
- * @desc    Reject purchase return (ADMIN only)
- * @access  Private (ADMIN)
- */
-router.patch("/purchases/:id/reject", authenticate, authorize(["ADMIN"]), ReturnController.rejectPurchaseReturn);
+router.get(
+  "/stats",
+  authenticate,
+  authorize(["ADMIN", "KASIR"]),
+  ReturnController.getStats
+);
 
 // ============================================
-// SALES RETURNS (RETUR DARI MEMBER)
+// PURCHASE RETURNS
 // ============================================
+router.get(
+  "/purchases",
+  authenticate,
+  authorize(["ADMIN", "KASIR"]),
+  ReturnController.getPurchaseReturns
+);
 
-/**
- * @route   GET /api/returns/sales
- * @desc    Get all sales returns with pagination
- * @access  Private (ADMIN, KASIR)
- */
-router.get("/sales", authenticate, authorize(["ADMIN", "KASIR"]), ReturnController.getSalesReturns);
+router.get(
+  "/purchases/:id",
+  authenticate,
+  authorize(["ADMIN", "KASIR"]),
+  ReturnController.getPurchaseReturnById
+);
 
-/**
- * @route   GET /api/returns/sales/:id
- * @desc    Get sales return detail by ID
- * @access  Private (ADMIN, KASIR)
- */
-router.get("/sales/:id", authenticate, authorize(["ADMIN", "KASIR"]), ReturnController.getSalesReturnById);
+// ✅ WITH VALIDATION
+router.post(
+  "/purchases",
+  authenticate,
+  authorize(["ADMIN", "KASIR"]),
+  validate(createPurchaseReturnSchema),
+  ReturnController.createPurchaseReturn
+);
 
-/**
- * @route   POST /api/returns/sales
- * @desc    Create new sales return (retur dari member)
- * @access  Private (ADMIN, KASIR)
- */
-router.post("/sales", authenticate, authorize(["ADMIN", "KASIR"]), ReturnController.createSalesReturn);
+// ✅ WITH VALIDATION
+router.patch(
+  "/purchases/:id/approve",
+  authenticate,
+  authorize(["ADMIN"]),
+  validate(approveReturnSchema),
+  ReturnController.approvePurchaseReturn
+);
 
-/**
- * @route   PATCH /api/returns/sales/:id/approve
- * @desc    Approve sales return (ADMIN only)
- * @access  Private (ADMIN)
- */
-router.patch("/sales/:id/approve", authenticate, authorize(["ADMIN"]), ReturnController.approveSalesReturn);
+// ✅ WITH VALIDATION
+router.patch(
+  "/purchases/:id/reject",
+  authenticate,
+  authorize(["ADMIN"]),
+  validate(rejectReturnSchema),
+  ReturnController.rejectPurchaseReturn
+);
 
-/**
- * @route   PATCH /api/returns/sales/:id/reject
- * @desc    Reject sales return (ADMIN only)
- * @access  Private (ADMIN)
- */
-router.patch("/sales/:id/reject", authenticate, authorize(["ADMIN"]), ReturnController.rejectSalesReturn);
+// ============================================
+// SALES RETURNS
+// ============================================
+router.get(
+  "/sales",
+  authenticate,
+  authorize(["ADMIN", "KASIR"]),
+  ReturnController.getSalesReturns
+);
+
+router.get(
+  "/sales/:id",
+  authenticate,
+  authorize(["ADMIN", "KASIR"]),
+  ReturnController.getSalesReturnById
+);
+
+// ✅ WITH VALIDATION
+router.post(
+  "/sales",
+  authenticate,
+  authorize(["ADMIN", "KASIR"]),
+  validate(createSalesReturnSchema),
+  ReturnController.createSalesReturn
+);
+
+// ✅ WITH VALIDATION
+router.patch(
+  "/sales/:id/approve",
+  authenticate,
+  authorize(["ADMIN"]),
+  validate(approveReturnSchema),
+  ReturnController.approveSalesReturn
+);
+
+// ✅ WITH VALIDATION
+router.patch(
+  "/sales/:id/reject",
+  authenticate,
+  authorize(["ADMIN"]),
+  validate(rejectReturnSchema),
+  ReturnController.rejectSalesReturn
+);
 
 module.exports = router;
