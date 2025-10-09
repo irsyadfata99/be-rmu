@@ -1,5 +1,5 @@
 // ============================================
-// src/models/PurchaseReturn.js (FIXED - Remove Associations)
+// src/models/PurchaseReturn.js (VERIFIED - NO MANUAL ASSOCIATIONS)
 // ============================================
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
@@ -200,8 +200,8 @@ PurchaseReturnItem.prototype.toJSON = function () {
 };
 
 // ============================================
-// ⚠️ NO ASSOCIATIONS HERE
-// All associations are in src/models/index.js
+// ⚠️ NO ASSOCIATIONS HERE!
+// All associations are defined in src/models/index.js
 // ============================================
 
 module.exports = { PurchaseReturn, PurchaseReturnItem };

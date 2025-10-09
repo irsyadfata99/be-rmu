@@ -2,7 +2,15 @@
 // src/controllers/PaymentController.js
 // Controller untuk pembayaran hutang (member & supplier)
 // ============================================
-const { MemberDebt, DebtPayment } = require("../models/MemberDebt");
+const {
+  MemberDebt,
+  DebtPayment,
+  SupplierDebt,
+  Member,
+  Supplier,
+  Sale,
+  Purchase,
+} = require("../models");
 const SupplierDebt = require("../models/SupplierDebt");
 const Member = require("../models/Member");
 const Supplier = require("../models/Supplier");
@@ -23,7 +31,16 @@ class PaymentController {
    */
   static async getMemberDebts(req, res, next) {
     try {
-      const { page = 1, limit = 10, memberId, status, overdue = false, search = "", sortBy = "createdAt", sortOrder = "DESC" } = req.query;
+      const {
+        page = 1,
+        limit = 10,
+        memberId,
+        status,
+        overdue = false,
+        search = "",
+        sortBy = "createdAt",
+        sortOrder = "DESC",
+      } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const whereClause = {};
@@ -64,7 +81,14 @@ class PaymentController {
           {
             model: Member,
             as: "member",
-            attributes: ["id", "uniqueId", "fullName", "whatsapp", "regionCode", "regionName"],
+            attributes: [
+              "id",
+              "uniqueId",
+              "fullName",
+              "whatsapp",
+              "regionCode",
+              "regionName",
+            ],
           },
           {
             model: Sale,
@@ -87,7 +111,12 @@ class PaymentController {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
 
-      return ApiResponse.paginated(res, rows, pagination, "Daftar piutang member berhasil diambil");
+      return ApiResponse.paginated(
+        res,
+        rows,
+        pagination,
+        "Daftar piutang member berhasil diambil"
+      );
     } catch (error) {
       next(error);
     }
@@ -126,7 +155,10 @@ class PaymentController {
       });
 
       // Calculate totals
-      const totalDebt = debts.reduce((sum, debt) => sum + parseFloat(debt.remainingAmount), 0);
+      const totalDebt = debts.reduce(
+        (sum, debt) => sum + parseFloat(debt.remainingAmount),
+        0
+      );
       const overdueDebts = debts.filter((debt) => debt.isOverdue());
 
       return ApiResponse.success(
@@ -165,7 +197,11 @@ class PaymentController {
       // Validation
       if (!amount || amount <= 0) {
         await t.rollback();
-        return ApiResponse.error(res, "Jumlah pembayaran harus lebih dari 0", 422);
+        return ApiResponse.error(
+          res,
+          "Jumlah pembayaran harus lebih dari 0",
+          422
+        );
       }
 
       // Get debt
@@ -191,14 +227,23 @@ class PaymentController {
 
       if (amount > debt.remainingAmount) {
         await t.rollback();
-        return ApiResponse.error(res, `Pembayaran melebihi sisa hutang. Sisa: ${debt.remainingAmount}`, 400);
+        return ApiResponse.error(
+          res,
+          `Pembayaran melebihi sisa hutang. Sisa: ${debt.remainingAmount}`,
+          400
+        );
       }
 
       // Generate receipt number
       const receiptNumber = await generatePaymentNumber();
 
       // Process payment
-      const payment = await debt.addPayment(amount, req.user.id, paymentMethod, notes);
+      const payment = await debt.addPayment(
+        amount,
+        req.user.id,
+        paymentMethod,
+        notes
+      );
 
       // Update receipt number
       await payment.update({ receiptNumber }, { transaction: t });
@@ -221,7 +266,11 @@ class PaymentController {
         ],
       });
 
-      console.log(`✅ Member debt payment: ${debt.invoiceNumber} - Rp ${amount.toLocaleString("id-ID")} (${receiptNumber})`);
+      console.log(
+        `✅ Member debt payment: ${
+          debt.invoiceNumber
+        } - Rp ${amount.toLocaleString("id-ID")} (${receiptNumber})`
+      );
 
       return ApiResponse.success(
         res,
@@ -255,7 +304,13 @@ class PaymentController {
           {
             model: Sale,
             as: "sale",
-            attributes: ["id", "invoiceNumber", "saleDate", "totalAmount", "finalAmount"],
+            attributes: [
+              "id",
+              "invoiceNumber",
+              "saleDate",
+              "totalAmount",
+              "finalAmount",
+            ],
           },
           {
             model: DebtPayment,
@@ -284,7 +339,16 @@ class PaymentController {
    */
   static async getSupplierDebts(req, res, next) {
     try {
-      const { page = 1, limit = 10, supplierId, status, overdue = false, search = "", sortBy = "createdAt", sortOrder = "DESC" } = req.query;
+      const {
+        page = 1,
+        limit = 10,
+        supplierId,
+        status,
+        overdue = false,
+        search = "",
+        sortBy = "createdAt",
+        sortOrder = "DESC",
+      } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const whereClause = {};
@@ -342,7 +406,12 @@ class PaymentController {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
 
-      return ApiResponse.paginated(res, rows, pagination, "Daftar hutang supplier berhasil diambil");
+      return ApiResponse.paginated(
+        res,
+        rows,
+        pagination,
+        "Daftar hutang supplier berhasil diambil"
+      );
     } catch (error) {
       next(error);
     }
@@ -376,7 +445,10 @@ class PaymentController {
       });
 
       // Calculate totals
-      const totalDebt = debts.reduce((sum, debt) => sum + parseFloat(debt.remainingAmount), 0);
+      const totalDebt = debts.reduce(
+        (sum, debt) => sum + parseFloat(debt.remainingAmount),
+        0
+      );
       const overdueDebts = debts.filter((debt) => debt.isOverdue());
 
       return ApiResponse.success(
@@ -415,7 +487,11 @@ class PaymentController {
       // Validation
       if (!amount || amount <= 0) {
         await t.rollback();
-        return ApiResponse.error(res, "Jumlah pembayaran harus lebih dari 0", 422);
+        return ApiResponse.error(
+          res,
+          "Jumlah pembayaran harus lebih dari 0",
+          422
+        );
       }
 
       // Get debt
@@ -441,7 +517,11 @@ class PaymentController {
 
       if (amount > debt.remainingAmount) {
         await t.rollback();
-        return ApiResponse.error(res, `Pembayaran melebihi sisa hutang. Sisa: ${debt.remainingAmount}`, 400);
+        return ApiResponse.error(
+          res,
+          `Pembayaran melebihi sisa hutang. Sisa: ${debt.remainingAmount}`,
+          400
+        );
       }
 
       // Process payment
@@ -460,7 +540,11 @@ class PaymentController {
         ],
       });
 
-      console.log(`✅ Supplier debt payment: ${debt.invoiceNumber} - Rp ${amount.toLocaleString("id-ID")}`);
+      console.log(
+        `✅ Supplier debt payment: ${
+          debt.invoiceNumber
+        } - Rp ${amount.toLocaleString("id-ID")}`
+      );
 
       return ApiResponse.success(
         res,
@@ -488,7 +572,14 @@ class PaymentController {
           {
             model: Supplier,
             as: "supplier",
-            attributes: ["id", "code", "name", "phone", "address", "contactPerson"],
+            attributes: [
+              "id",
+              "code",
+              "name",
+              "phone",
+              "address",
+              "contactPerson",
+            ],
           },
           {
             model: Purchase,
@@ -556,7 +647,11 @@ class PaymentController {
         },
       };
 
-      return ApiResponse.success(res, stats, "Statistik pembayaran berhasil diambil");
+      return ApiResponse.success(
+        res,
+        stats,
+        "Statistik pembayaran berhasil diambil"
+      );
     } catch (error) {
       next(error);
     }

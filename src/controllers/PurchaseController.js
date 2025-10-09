@@ -2,7 +2,14 @@
 // src/controllers/PurchaseController.js
 // Controller untuk transaksi pembelian (barang masuk)
 // ============================================
-const { Purchase, PurchaseItem } = require("../models/Purchase");
+const {
+  Purchase,
+  PurchaseItem,
+  Product,
+  Supplier,
+  SupplierDebt,
+  StockMovement,
+} = require("../models");
 const Product = require("../models/Product");
 const Supplier = require("../models/Supplier");
 const SupplierDebt = require("../models/SupplierDebt");
@@ -58,7 +65,11 @@ class PurchaseController {
       // Validasi KREDIT harus punya due date
       if (purchaseType === "KREDIT" && !dueDate) {
         await t.rollback();
-        return ApiResponse.error(res, "Jatuh tempo harus diisi untuk pembelian kredit", 422);
+        return ApiResponse.error(
+          res,
+          "Jatuh tempo harus diisi untuk pembelian kredit",
+          422
+        );
       }
 
       // ===== PROCESS ITEMS & CALCULATE TOTAL =====
@@ -66,11 +77,17 @@ class PurchaseController {
       const processedItems = [];
 
       for (const item of items) {
-        const product = await Product.findByPk(item.productId, { transaction: t });
+        const product = await Product.findByPk(item.productId, {
+          transaction: t,
+        });
 
         if (!product) {
           await t.rollback();
-          return ApiResponse.error(res, `Produk tidak ditemukan: ${item.productId}`, 404);
+          return ApiResponse.error(
+            res,
+            `Produk tidak ditemukan: ${item.productId}`,
+            404
+          );
         }
 
         const subtotal = parseFloat(item.purchasePrice) * item.quantity;
@@ -92,11 +109,16 @@ class PurchaseController {
 
       if (paidAmount > totalAmount) {
         await t.rollback();
-        return ApiResponse.error(res, "Pembayaran tidak boleh lebih besar dari total", 400);
+        return ApiResponse.error(
+          res,
+          "Pembayaran tidak boleh lebih besar dari total",
+          400
+        );
       }
 
       // ===== GENERATE PURCHASE NUMBER =====
-      const invoiceNumber = supplierInvoiceNumber || (await generatePurchaseNumber());
+      const invoiceNumber =
+        supplierInvoiceNumber || (await generatePurchaseNumber());
 
       // ===== CREATE PURCHASE =====
       const purchase = await Purchase.create(
@@ -110,7 +132,12 @@ class PurchaseController {
           paidAmount: paidAmount || 0,
           remainingDebt,
           dueDate: dueDate || null,
-          status: paidAmount >= totalAmount ? "PAID" : paidAmount > 0 ? "PARTIAL" : "PENDING",
+          status:
+            paidAmount >= totalAmount
+              ? "PAID"
+              : paidAmount > 0
+              ? "PARTIAL"
+              : "PENDING",
           notes,
         },
         { transaction: t }
@@ -134,7 +161,9 @@ class PurchaseController {
         );
 
         // Update product stock & prices
-        const product = await Product.findByPk(item.productId, { transaction: t });
+        const product = await Product.findByPk(item.productId, {
+          transaction: t,
+        });
         const quantityBefore = product.stock;
 
         await product.update(
@@ -206,9 +235,17 @@ class PurchaseController {
         ],
       });
 
-      console.log(`✅ Purchase created: ${purchase.invoiceNumber} - ${purchaseType} - Rp ${totalAmount.toLocaleString("id-ID")}`);
+      console.log(
+        `✅ Purchase created: ${
+          purchase.invoiceNumber
+        } - ${purchaseType} - Rp ${totalAmount.toLocaleString("id-ID")}`
+      );
 
-      return ApiResponse.created(res, completePurchase, "Pembelian berhasil dibuat");
+      return ApiResponse.created(
+        res,
+        completePurchase,
+        "Pembelian berhasil dibuat"
+      );
     } catch (error) {
       await t.rollback();
       console.error("❌ Error creating purchase:", error);
@@ -221,7 +258,18 @@ class PurchaseController {
   // ============================================
   static async getAll(req, res, next) {
     try {
-      const { page = 1, limit = 10, search = "", purchaseType, status, supplierId, startDate, endDate, sortBy = "purchaseDate", sortOrder = "DESC" } = req.query;
+      const {
+        page = 1,
+        limit = 10,
+        search = "",
+        purchaseType,
+        status,
+        supplierId,
+        startDate,
+        endDate,
+        sortBy = "purchaseDate",
+        sortOrder = "DESC",
+      } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const whereClause = {};
@@ -284,7 +332,12 @@ class PurchaseController {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
 
-      return ApiResponse.paginated(res, rows, pagination, "Pembelian berhasil diambil");
+      return ApiResponse.paginated(
+        res,
+        rows,
+        pagination,
+        "Pembelian berhasil diambil"
+      );
     } catch (error) {
       next(error);
     }
@@ -306,7 +359,14 @@ class PurchaseController {
           {
             model: Supplier,
             as: "supplier",
-            attributes: ["id", "code", "name", "phone", "address", "contactPerson"],
+            attributes: [
+              "id",
+              "code",
+              "name",
+              "phone",
+              "address",
+              "contactPerson",
+            ],
           },
           {
             model: SupplierDebt,
@@ -320,7 +380,11 @@ class PurchaseController {
         return ApiResponse.notFound(res, "Pembelian tidak ditemukan");
       }
 
-      return ApiResponse.success(res, purchase, "Detail pembelian berhasil diambil");
+      return ApiResponse.success(
+        res,
+        purchase,
+        "Detail pembelian berhasil diambil"
+      );
     } catch (error) {
       next(error);
     }
@@ -376,7 +440,11 @@ class PurchaseController {
         pendingDebts: parseFloat(pendingDebts || 0).toFixed(2),
       };
 
-      return ApiResponse.success(res, stats, "Statistik pembelian berhasil diambil");
+      return ApiResponse.success(
+        res,
+        stats,
+        "Statistik pembelian berhasil diambil"
+      );
     } catch (error) {
       next(error);
     }
@@ -394,7 +462,11 @@ class PurchaseController {
 
       if (!amount || amount <= 0) {
         await t.rollback();
-        return ApiResponse.error(res, "Jumlah pembayaran harus lebih dari 0", 422);
+        return ApiResponse.error(
+          res,
+          "Jumlah pembayaran harus lebih dari 0",
+          422
+        );
       }
 
       const purchase = await Purchase.findByPk(id, {
@@ -414,12 +486,17 @@ class PurchaseController {
 
       if (amount > purchase.remainingDebt) {
         await t.rollback();
-        return ApiResponse.error(res, `Pembayaran melebihi sisa hutang. Sisa: ${purchase.remainingDebt}`, 400);
+        return ApiResponse.error(
+          res,
+          `Pembayaran melebihi sisa hutang. Sisa: ${purchase.remainingDebt}`,
+          400
+        );
       }
 
       // Update purchase payment
       purchase.paidAmount = parseFloat(purchase.paidAmount) + amount;
-      purchase.remainingDebt = parseFloat(purchase.totalAmount) - purchase.paidAmount;
+      purchase.remainingDebt =
+        parseFloat(purchase.totalAmount) - purchase.paidAmount;
 
       if (purchase.remainingDebt === 0) {
         purchase.status = "PAID";
@@ -449,9 +526,17 @@ class PurchaseController {
         ],
       });
 
-      console.log(`✅ Purchase payment updated: ${purchase.invoiceNumber} - Rp ${amount.toLocaleString("id-ID")}`);
+      console.log(
+        `✅ Purchase payment updated: ${
+          purchase.invoiceNumber
+        } - Rp ${amount.toLocaleString("id-ID")}`
+      );
 
-      return ApiResponse.success(res, updatedPurchase, "Pembayaran berhasil diupdate");
+      return ApiResponse.success(
+        res,
+        updatedPurchase,
+        "Pembayaran berhasil diupdate"
+      );
     } catch (error) {
       await t.rollback();
       console.error("❌ Error updating purchase payment:", error);

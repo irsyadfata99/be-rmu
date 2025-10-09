@@ -1,7 +1,7 @@
 // ============================================
 // src/controllers/SaleController.js (COMPLETE WITH POINTS)
 // ============================================
-const { Sale, SaleItem } = require("../models/Sale");
+const { Sale, SaleItem } = require("../models");
 const Product = require("../models/Product");
 const Member = require("../models/Member");
 const User = require("../models/User");
@@ -10,7 +10,10 @@ const { StockMovement } = require("../models/StockMovement");
 const PointTransaction = require("../models/PointTransaction");
 const ApiResponse = require("../utils/response");
 const { generateInvoiceNumber } = require("../utils/invoiceGenerator");
-const { generateDotMatrixInvoice, generateThermalReceipt } = require("../utils/printFormatter");
+const {
+  generateDotMatrixInvoice,
+  generateThermalReceipt,
+} = require("../utils/printFormatter");
 const { calculateTransactionPoints } = require("../utils/pointCalculator");
 const { sequelize } = require("../config/database");
 const { Op } = require("sequelize");
@@ -23,7 +26,17 @@ class SaleController {
     const t = await sequelize.transaction();
 
     try {
-      const { memberId, saleType = "TUNAI", items, discountPercentage = 0, discountAmount = 0, dpAmount = 0, paymentReceived = 0, dueDate, notes } = req.body;
+      const {
+        memberId,
+        saleType = "TUNAI",
+        items,
+        discountPercentage = 0,
+        discountAmount = 0,
+        dpAmount = 0,
+        paymentReceived = 0,
+        dueDate,
+        notes,
+      } = req.body;
 
       const userId = req.user.id;
 
@@ -35,7 +48,11 @@ class SaleController {
 
       if (saleType === "KREDIT" && !memberId) {
         await t.rollback();
-        return ApiResponse.error(res, "Member harus dipilih untuk transaksi kredit", 422);
+        return ApiResponse.error(
+          res,
+          "Member harus dipilih untuk transaksi kredit",
+          422
+        );
       }
 
       // Get member (if exists)
@@ -57,21 +74,35 @@ class SaleController {
       const processedItems = [];
 
       for (const item of items) {
-        const product = await Product.findByPk(item.productId, { transaction: t });
+        const product = await Product.findByPk(item.productId, {
+          transaction: t,
+        });
 
         if (!product) {
           await t.rollback();
-          return ApiResponse.error(res, `Produk tidak ditemukan: ${item.productId}`, 404);
+          return ApiResponse.error(
+            res,
+            `Produk tidak ditemukan: ${item.productId}`,
+            404
+          );
         }
 
         if (!product.isActive) {
           await t.rollback();
-          return ApiResponse.error(res, `Produk tidak aktif: ${product.name}`, 400);
+          return ApiResponse.error(
+            res,
+            `Produk tidak aktif: ${product.name}`,
+            400
+          );
         }
 
         if (product.stock < item.quantity) {
           await t.rollback();
-          return ApiResponse.error(res, `Stok tidak cukup untuk ${product.name}. Tersedia: ${product.stock}, Diminta: ${item.quantity}`, 400);
+          return ApiResponse.error(
+            res,
+            `Stok tidak cukup untuk ${product.name}. Tersedia: ${product.stock}, Diminta: ${item.quantity}`,
+            400
+          );
         }
 
         const subtotal = parseFloat(product.sellingPrice) * item.quantity;
@@ -92,7 +123,10 @@ class SaleController {
         ? await calculateTransactionPoints(processedItems)
         : {
             totalPoints: 0,
-            itemsWithPoints: processedItems.map((i) => ({ ...i, pointsEarned: 0 })),
+            itemsWithPoints: processedItems.map((i) => ({
+              ...i,
+              pointsEarned: 0,
+            })),
           };
       const totalPointsEarned = pointsResult.totalPoints;
       const itemsWithPoints = pointsResult.itemsWithPoints;
@@ -111,18 +145,30 @@ class SaleController {
       if (saleType === "TUNAI") {
         if (paymentReceived < finalAmount) {
           await t.rollback();
-          return ApiResponse.error(res, `Pembayaran kurang. Total: ${finalAmount}, Diterima: ${paymentReceived}`, 400);
+          return ApiResponse.error(
+            res,
+            `Pembayaran kurang. Total: ${finalAmount}, Diterima: ${paymentReceived}`,
+            400
+          );
         }
         changeAmount = paymentReceived - finalAmount;
       } else {
         remainingDebt = finalAmount - dpAmount;
         if (dpAmount > finalAmount) {
           await t.rollback();
-          return ApiResponse.error(res, "DP tidak boleh lebih besar dari total", 400);
+          return ApiResponse.error(
+            res,
+            "DP tidak boleh lebih besar dari total",
+            400
+          );
         }
         if (!dueDate) {
           await t.rollback();
-          return ApiResponse.error(res, "Jatuh tempo harus diisi untuk transaksi kredit", 422);
+          return ApiResponse.error(
+            res,
+            "Jatuh tempo harus diisi untuk transaksi kredit",
+            422
+          );
         }
       }
 
@@ -146,7 +192,14 @@ class SaleController {
           paymentReceived: paymentReceived || 0,
           changeAmount,
           dueDate: dueDate || null,
-          status: saleType === "TUNAI" ? "PAID" : dpAmount >= finalAmount ? "PAID" : dpAmount > 0 ? "PARTIAL" : "PENDING",
+          status:
+            saleType === "TUNAI"
+              ? "PAID"
+              : dpAmount >= finalAmount
+              ? "PAID"
+              : dpAmount > 0
+              ? "PARTIAL"
+              : "PENDING",
           notes,
         },
         { transaction: t }
@@ -169,7 +222,9 @@ class SaleController {
         );
 
         // ===== UPDATE PRODUCT STOCK =====
-        const product = await Product.findByPk(item.productId, { transaction: t });
+        const product = await Product.findByPk(item.productId, {
+          transaction: t,
+        });
         await product.reduceStock(item.quantity);
 
         // ===== RECORD STOCK MOVEMENT =====
@@ -211,13 +266,20 @@ class SaleController {
 
       // ===== RECORD POINTS (NEW!) =====
       if (member && totalPointsEarned > 0) {
-        await PointTransaction.recordEarn(member.id, sale.id, totalPointsEarned, `Pembelian ${invoiceNumber} - ${totalPointsEarned} point`, t);
+        await PointTransaction.recordEarn(
+          member.id,
+          sale.id,
+          totalPointsEarned,
+          `Pembelian ${invoiceNumber} - ${totalPointsEarned} point`,
+          t
+        );
       }
 
       // ===== UPDATE MEMBER STATS =====
       if (member) {
         member.totalTransactions += 1;
-        member.monthlySpending = parseFloat(member.monthlySpending) + finalAmount;
+        member.monthlySpending =
+          parseFloat(member.monthlySpending) + finalAmount;
         await member.save({ transaction: t });
       }
 
@@ -234,14 +296,30 @@ class SaleController {
           {
             model: Member,
             as: "member",
-            attributes: ["id", "uniqueId", "fullName", "whatsapp", "totalPoints"],
+            attributes: [
+              "id",
+              "uniqueId",
+              "fullName",
+              "whatsapp",
+              "totalPoints",
+            ],
           },
         ],
       });
 
-      console.log(`✅ Sale created: ${sale.invoiceNumber} - ${saleType} - Rp ${finalAmount.toLocaleString("id-ID")} - ${totalPointsEarned} points`);
+      console.log(
+        `✅ Sale created: ${
+          sale.invoiceNumber
+        } - ${saleType} - Rp ${finalAmount.toLocaleString(
+          "id-ID"
+        )} - ${totalPointsEarned} points`
+      );
 
-      return ApiResponse.created(res, completeSale, "Transaksi berhasil dibuat");
+      return ApiResponse.created(
+        res,
+        completeSale,
+        "Transaksi berhasil dibuat"
+      );
     } catch (error) {
       await t.rollback();
       console.error("❌ Error creating sale:", error);
@@ -254,7 +332,18 @@ class SaleController {
   // ============================================
   static async getAll(req, res, next) {
     try {
-      const { page = 1, limit = 10, search = "", saleType, status, memberId, startDate, endDate, sortBy = "saleDate", sortOrder = "DESC" } = req.query;
+      const {
+        page = 1,
+        limit = 10,
+        search = "",
+        saleType,
+        status,
+        memberId,
+        startDate,
+        endDate,
+        sortBy = "saleDate",
+        sortOrder = "DESC",
+      } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const whereClause = {};
@@ -322,7 +411,12 @@ class SaleController {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
 
-      return ApiResponse.paginated(res, rows, pagination, "Penjualan berhasil diambil");
+      return ApiResponse.paginated(
+        res,
+        rows,
+        pagination,
+        "Penjualan berhasil diambil"
+      );
     } catch (error) {
       next(error);
     }
@@ -344,7 +438,14 @@ class SaleController {
           {
             model: Member,
             as: "member",
-            attributes: ["id", "uniqueId", "fullName", "whatsapp", "address", "totalPoints"],
+            attributes: [
+              "id",
+              "uniqueId",
+              "fullName",
+              "whatsapp",
+              "address",
+              "totalPoints",
+            ],
           },
           {
             model: User,
@@ -363,7 +464,11 @@ class SaleController {
         return ApiResponse.notFound(res, "Transaksi tidak ditemukan");
       }
 
-      return ApiResponse.success(res, sale, "Detail transaksi berhasil diambil");
+      return ApiResponse.success(
+        res,
+        sale,
+        "Detail transaksi berhasil diambil"
+      );
     } catch (error) {
       next(error);
     }
@@ -414,7 +519,11 @@ class SaleController {
         pendingDebts: parseFloat(pendingDebts || 0).toFixed(2),
       };
 
-      return ApiResponse.success(res, stats, "Statistik penjualan berhasil diambil");
+      return ApiResponse.success(
+        res,
+        stats,
+        "Statistik penjualan berhasil diambil"
+      );
     } catch (error) {
       next(error);
     }

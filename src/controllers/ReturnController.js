@@ -2,8 +2,22 @@
 // src/controllers/ReturnController.js
 // Controller untuk Purchase Return & Sales Return
 // ============================================
-const { PurchaseReturn, PurchaseReturnItem } = require("../models/PurchaseReturn");
-const { SalesReturn, SalesReturnItem } = require("../models/SalesReturn");
+const {
+  PurchaseReturn,
+  PurchaseReturnItem,
+  SalesReturn,
+  SalesReturnItem,
+  Purchase,
+  PurchaseItem,
+  Sale,
+  SaleItem,
+  Product,
+  Supplier,
+  Member,
+  SupplierDebt,
+  MemberDebt,
+  StockMovement,
+} = require("../models");
 const { Purchase, PurchaseItem } = require("../models/Purchase");
 const { Sale, SaleItem } = require("../models/Sale");
 const Product = require("../models/Product");
@@ -26,7 +40,17 @@ class ReturnController {
    */
   static async getPurchaseReturns(req, res, next) {
     try {
-      const { page = 1, limit = 10, search = "", supplierId, status, startDate, endDate, sortBy = "returnDate", sortOrder = "DESC" } = req.query;
+      const {
+        page = 1,
+        limit = 10,
+        search = "",
+        supplierId,
+        status,
+        startDate,
+        endDate,
+        sortBy = "returnDate",
+        sortOrder = "DESC",
+      } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const whereClause = {};
@@ -81,7 +105,12 @@ class ReturnController {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
 
-      return ApiResponse.paginated(res, rows, pagination, "Retur pembelian berhasil diambil");
+      return ApiResponse.paginated(
+        res,
+        rows,
+        pagination,
+        "Retur pembelian berhasil diambil"
+      );
     } catch (error) {
       next(error);
     }
@@ -124,7 +153,11 @@ class ReturnController {
         return ApiResponse.notFound(res, "Retur pembelian tidak ditemukan");
       }
 
-      return ApiResponse.success(res, purchaseReturn, "Detail retur pembelian berhasil diambil");
+      return ApiResponse.success(
+        res,
+        purchaseReturn,
+        "Detail retur pembelian berhasil diambil"
+      );
     } catch (error) {
       next(error);
     }
@@ -168,11 +201,17 @@ class ReturnController {
       const processedItems = [];
 
       for (const item of items) {
-        const product = await Product.findByPk(item.productId, { transaction: t });
+        const product = await Product.findByPk(item.productId, {
+          transaction: t,
+        });
 
         if (!product) {
           await t.rollback();
-          return ApiResponse.error(res, `Produk tidak ditemukan: ${item.productId}`, 404);
+          return ApiResponse.error(
+            res,
+            `Produk tidak ditemukan: ${item.productId}`,
+            404
+          );
         }
 
         // Validate quantity
@@ -227,12 +266,18 @@ class ReturnController {
         );
 
         // Reduce stock (barang keluar kembali ke supplier)
-        const product = await Product.findByPk(item.productId, { transaction: t });
+        const product = await Product.findByPk(item.productId, {
+          transaction: t,
+        });
         const quantityBefore = product.stock;
 
         if (product.stock < item.quantity) {
           await t.rollback();
-          return ApiResponse.error(res, `Stok tidak cukup untuk ${product.name}. Tersedia: ${product.stock}`, 400);
+          return ApiResponse.error(
+            res,
+            `Stok tidak cukup untuk ${product.name}. Tersedia: ${product.stock}`,
+            400
+          );
         }
 
         await product.update(
@@ -282,9 +327,17 @@ class ReturnController {
         ],
       });
 
-      console.log(`✅ Purchase return created: ${returnNumber} - Rp ${totalAmount.toLocaleString("id-ID")}`);
+      console.log(
+        `✅ Purchase return created: ${returnNumber} - Rp ${totalAmount.toLocaleString(
+          "id-ID"
+        )}`
+      );
 
-      return ApiResponse.created(res, completeReturn, "Retur pembelian berhasil dibuat");
+      return ApiResponse.created(
+        res,
+        completeReturn,
+        "Retur pembelian berhasil dibuat"
+      );
     } catch (error) {
       await t.rollback();
       console.error("❌ Error creating purchase return:", error);
@@ -319,7 +372,11 @@ class ReturnController {
 
       if (purchaseReturn.status !== "PENDING") {
         await t.rollback();
-        return ApiResponse.error(res, `Retur sudah ${purchaseReturn.status}`, 400);
+        return ApiResponse.error(
+          res,
+          `Retur sudah ${purchaseReturn.status}`,
+          400
+        );
       }
 
       // Update status
@@ -339,7 +396,10 @@ class ReturnController {
         });
 
         if (debt && debt.remainingAmount > 0) {
-          const deductAmount = Math.min(purchaseReturn.totalAmount, debt.remainingAmount);
+          const deductAmount = Math.min(
+            purchaseReturn.totalAmount,
+            debt.remainingAmount
+          );
 
           debt.paidAmount = parseFloat(debt.paidAmount) + deductAmount;
           debt.remainingAmount = parseFloat(debt.totalAmount) - debt.paidAmount;
@@ -351,7 +411,9 @@ class ReturnController {
           await debt.save({ transaction: t });
 
           // Update supplier total debt
-          const supplier = await Supplier.findByPk(purchaseReturn.supplierId, { transaction: t });
+          const supplier = await Supplier.findByPk(purchaseReturn.supplierId, {
+            transaction: t,
+          });
           supplier.totalDebt = parseFloat(supplier.totalDebt) - deductAmount;
           await supplier.save({ transaction: t });
         }
@@ -368,9 +430,15 @@ class ReturnController {
         ],
       });
 
-      console.log(`✅ Purchase return approved: ${purchaseReturn.returnNumber}`);
+      console.log(
+        `✅ Purchase return approved: ${purchaseReturn.returnNumber}`
+      );
 
-      return ApiResponse.success(res, updatedReturn, "Retur pembelian berhasil disetujui");
+      return ApiResponse.success(
+        res,
+        updatedReturn,
+        "Retur pembelian berhasil disetujui"
+      );
     } catch (error) {
       await t.rollback();
       console.error("❌ Error approving purchase return:", error);
@@ -410,7 +478,11 @@ class ReturnController {
 
       if (purchaseReturn.status !== "PENDING") {
         await t.rollback();
-        return ApiResponse.error(res, `Retur sudah ${purchaseReturn.status}`, 400);
+        return ApiResponse.error(
+          res,
+          `Retur sudah ${purchaseReturn.status}`,
+          400
+        );
       }
 
       // Update status
@@ -424,7 +496,9 @@ class ReturnController {
 
       // Kembalikan stok (karena retur ditolak, barang tetap di kita)
       for (const item of purchaseReturn.items) {
-        const product = await Product.findByPk(item.productId, { transaction: t });
+        const product = await Product.findByPk(item.productId, {
+          transaction: t,
+        });
         await product.update(
           {
             stock: product.stock + item.quantity,
@@ -435,9 +509,15 @@ class ReturnController {
 
       await t.commit();
 
-      console.log(`❌ Purchase return rejected: ${purchaseReturn.returnNumber}`);
+      console.log(
+        `❌ Purchase return rejected: ${purchaseReturn.returnNumber}`
+      );
 
-      return ApiResponse.success(res, purchaseReturn, "Retur pembelian berhasil ditolak");
+      return ApiResponse.success(
+        res,
+        purchaseReturn,
+        "Retur pembelian berhasil ditolak"
+      );
     } catch (error) {
       await t.rollback();
       console.error("❌ Error rejecting purchase return:", error);
@@ -454,7 +534,17 @@ class ReturnController {
    */
   static async getSalesReturns(req, res, next) {
     try {
-      const { page = 1, limit = 10, search = "", memberId, status, startDate, endDate, sortBy = "returnDate", sortOrder = "DESC" } = req.query;
+      const {
+        page = 1,
+        limit = 10,
+        search = "",
+        memberId,
+        status,
+        startDate,
+        endDate,
+        sortBy = "returnDate",
+        sortOrder = "DESC",
+      } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const whereClause = {};
@@ -509,7 +599,12 @@ class ReturnController {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
 
-      return ApiResponse.paginated(res, rows, pagination, "Retur penjualan berhasil diambil");
+      return ApiResponse.paginated(
+        res,
+        rows,
+        pagination,
+        "Retur penjualan berhasil diambil"
+      );
     } catch (error) {
       next(error);
     }
@@ -552,7 +647,11 @@ class ReturnController {
         return ApiResponse.notFound(res, "Retur penjualan tidak ditemukan");
       }
 
-      return ApiResponse.success(res, salesReturn, "Detail retur penjualan berhasil diambil");
+      return ApiResponse.success(
+        res,
+        salesReturn,
+        "Detail retur penjualan berhasil diambil"
+      );
     } catch (error) {
       next(error);
     }
@@ -596,11 +695,17 @@ class ReturnController {
       const processedItems = [];
 
       for (const item of items) {
-        const product = await Product.findByPk(item.productId, { transaction: t });
+        const product = await Product.findByPk(item.productId, {
+          transaction: t,
+        });
 
         if (!product) {
           await t.rollback();
-          return ApiResponse.error(res, `Produk tidak ditemukan: ${item.productId}`, 404);
+          return ApiResponse.error(
+            res,
+            `Produk tidak ditemukan: ${item.productId}`,
+            404
+          );
         }
 
         // Validate quantity
@@ -656,7 +761,9 @@ class ReturnController {
         );
 
         // Add stock back (barang masuk kembali)
-        const product = await Product.findByPk(item.productId, { transaction: t });
+        const product = await Product.findByPk(item.productId, {
+          transaction: t,
+        });
         const quantityBefore = product.stock;
 
         await product.update(
@@ -706,9 +813,17 @@ class ReturnController {
         ],
       });
 
-      console.log(`✅ Sales return created: ${returnNumber} - Rp ${totalAmount.toLocaleString("id-ID")}`);
+      console.log(
+        `✅ Sales return created: ${returnNumber} - Rp ${totalAmount.toLocaleString(
+          "id-ID"
+        )}`
+      );
 
-      return ApiResponse.created(res, completeReturn, "Retur penjualan berhasil dibuat");
+      return ApiResponse.created(
+        res,
+        completeReturn,
+        "Retur penjualan berhasil dibuat"
+      );
     } catch (error) {
       await t.rollback();
       console.error("❌ Error creating sales return:", error);
@@ -756,7 +871,10 @@ class ReturnController {
       );
 
       // Handle refund based on method
-      if (salesReturn.refundMethod === "DEBT_DEDUCTION" && salesReturn.sale.saleType === "KREDIT") {
+      if (
+        salesReturn.refundMethod === "DEBT_DEDUCTION" &&
+        salesReturn.sale.saleType === "KREDIT"
+      ) {
         // Kurangi hutang member
         const debt = await MemberDebt.findOne({
           where: { saleId: salesReturn.saleId },
@@ -764,7 +882,10 @@ class ReturnController {
         });
 
         if (debt && debt.remainingAmount > 0) {
-          const deductAmount = Math.min(salesReturn.totalAmount, debt.remainingAmount);
+          const deductAmount = Math.min(
+            salesReturn.totalAmount,
+            debt.remainingAmount
+          );
 
           debt.paidAmount = parseFloat(debt.paidAmount) + deductAmount;
           debt.remainingAmount = parseFloat(debt.totalAmount) - debt.paidAmount;
@@ -777,7 +898,9 @@ class ReturnController {
 
           // Update member total debt
           if (salesReturn.memberId) {
-            const member = await Member.findByPk(salesReturn.memberId, { transaction: t });
+            const member = await Member.findByPk(salesReturn.memberId, {
+              transaction: t,
+            });
             member.totalDebt = parseFloat(member.totalDebt) - deductAmount;
             await member.save({ transaction: t });
           }
@@ -797,7 +920,11 @@ class ReturnController {
 
       console.log(`✅ Sales return approved: ${salesReturn.returnNumber}`);
 
-      return ApiResponse.success(res, updatedReturn, "Retur penjualan berhasil disetujui");
+      return ApiResponse.success(
+        res,
+        updatedReturn,
+        "Retur penjualan berhasil disetujui"
+      );
     } catch (error) {
       await t.rollback();
       console.error("❌ Error approving sales return:", error);
@@ -851,7 +978,9 @@ class ReturnController {
 
       // Kurangi stok kembali (karena retur ditolak, barang kembali ke member)
       for (const item of salesReturn.items) {
-        const product = await Product.findByPk(item.productId, { transaction: t });
+        const product = await Product.findByPk(item.productId, {
+          transaction: t,
+        });
         await product.update(
           {
             stock: product.stock - item.quantity,
@@ -864,7 +993,11 @@ class ReturnController {
 
       console.log(`❌ Sales return rejected: ${salesReturn.returnNumber}`);
 
-      return ApiResponse.success(res, salesReturn, "Retur penjualan berhasil ditolak");
+      return ApiResponse.success(
+        res,
+        salesReturn,
+        "Retur penjualan berhasil ditolak"
+      );
     } catch (error) {
       await t.rollback();
       console.error("❌ Error rejecting sales return:", error);
@@ -892,13 +1025,18 @@ class ReturnController {
       }
 
       // Purchase returns
-      const totalPurchaseReturns = await PurchaseReturn.count({ where: whereClause });
+      const totalPurchaseReturns = await PurchaseReturn.count({
+        where: whereClause,
+      });
       const pendingPurchaseReturns = await PurchaseReturn.count({
         where: { ...whereClause, status: "PENDING" },
       });
-      const totalPurchaseReturnAmount = await PurchaseReturn.sum("totalAmount", {
-        where: { ...whereClause, status: "APPROVED" },
-      });
+      const totalPurchaseReturnAmount = await PurchaseReturn.sum(
+        "totalAmount",
+        {
+          where: { ...whereClause, status: "APPROVED" },
+        }
+      );
 
       // Sales returns
       const totalSalesReturns = await SalesReturn.count({ where: whereClause });
@@ -922,7 +1060,11 @@ class ReturnController {
         },
       };
 
-      return ApiResponse.success(res, stats, "Statistik retur berhasil diambil");
+      return ApiResponse.success(
+        res,
+        stats,
+        "Statistik retur berhasil diambil"
+      );
     } catch (error) {
       next(error);
     }

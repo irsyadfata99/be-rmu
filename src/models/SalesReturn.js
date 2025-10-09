@@ -1,5 +1,5 @@
 // ============================================
-// src/models/SalesReturn.js (FIXED - COMPLETE)
+// src/models/SalesReturn.js (FIXED - NO MANUAL ASSOCIATIONS)
 // ============================================
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
@@ -189,20 +189,6 @@ const SalesReturnItem = sequelize.define(
 );
 
 // ============================================
-// ASSOCIATIONS
-// ============================================
-SalesReturn.hasMany(SalesReturnItem, {
-  foreignKey: "salesReturnId",
-  as: "items",
-  onDelete: "CASCADE",
-});
-
-SalesReturnItem.belongsTo(SalesReturn, {
-  foreignKey: "salesReturnId",
-  as: "salesReturn",
-});
-
-// ============================================
 // INSTANCE METHODS
 // ============================================
 SalesReturn.prototype.toJSON = function () {
@@ -218,5 +204,9 @@ SalesReturnItem.prototype.toJSON = function () {
   return values;
 };
 
-// ✅ EXPORT BOTH!
+// ============================================
+// ⚠️ NO ASSOCIATIONS HERE!
+// All associations are defined in src/models/index.js
+// ============================================
+
 module.exports = { SalesReturn, SalesReturnItem };
