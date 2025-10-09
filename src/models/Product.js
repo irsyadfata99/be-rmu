@@ -1,6 +1,7 @@
 // ============================================
 // src/models/Product.js (UPDATED - WITH POINTS PER UNIT)
 // Model untuk master data produk/barang
+// FIXED: Race condition dengan atomic stock update
 // ============================================
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
@@ -115,7 +116,6 @@ const Product = sequelize.define(
       },
       comment: "Batas minimum stok untuk alert",
     },
-    // ===== NEW: POINTS PER UNIT =====
     pointsPerUnit: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
@@ -126,9 +126,9 @@ const Product = sequelize.define(
           msg: "Points per unit tidak boleh negatif",
         },
       },
-      comment: "Point yang didapat per unit produk (untuk mode PER_PRODUCT, 0 = gunakan global rate)",
+      comment:
+        "Point yang didapat per unit produk (untuk mode PER_PRODUCT, 0 = gunakan global rate)",
     },
-    // ================================
     description: {
       type: DataTypes.TEXT,
       allowNull: true,
@@ -195,23 +195,62 @@ Product.prototype.isOutOfStock = function () {
 };
 
 /**
- * Add stock
+ * ✅ FIX: Add stock dengan atomic increment
+ * @param {number} quantity - Jumlah yang ditambah
+ * @param {object} transaction - Sequelize transaction (optional)
  */
-Product.prototype.addStock = async function (quantity) {
-  this.stock += quantity;
-  await this.save();
+Product.prototype.addStock = async function (quantity, transaction = null) {
+  // ✅ ATOMIC: Menggunakan increment untuk prevent race condition
+  await Product.increment("stock", {
+    by: quantity,
+    where: { id: this.id },
+    transaction: transaction,
+  });
+
+  // Reload untuk update instance
+  await this.reload({ transaction });
+
   return this;
 };
 
 /**
- * Reduce stock
+ * ✅ FIX: Reduce stock dengan atomic decrement + validation
+ * @param {number} quantity - Jumlah yang dikurangi
+ * @param {object} transaction - Sequelize transaction (optional)
  */
-Product.prototype.reduceStock = async function (quantity) {
+Product.prototype.reduceStock = async function (quantity, transaction = null) {
+  // ✅ FIX: Reload dulu untuk get latest stock
+  await this.reload({ transaction });
+
+  // Check if stock sufficient
   if (this.stock < quantity) {
-    throw new Error(`Stok tidak cukup. Tersedia: ${this.stock}, Diminta: ${quantity}`);
+    throw new Error(
+      `Stok tidak cukup untuk ${this.name}. Tersedia: ${this.stock}, Diminta: ${quantity}`
+    );
   }
-  this.stock -= quantity;
-  await this.save();
+
+  // ✅ ATOMIC: Menggunakan decrement untuk prevent race condition
+  const [affectedCount] = await Product.decrement("stock", {
+    by: quantity,
+    where: {
+      id: this.id,
+      stock: {
+        [require("sequelize").Op.gte]: quantity, // ✅ CRITICAL: Double check di query
+      },
+    },
+    transaction: transaction,
+  });
+
+  // ✅ CRITICAL: Check if update successful
+  if (affectedCount === 0) {
+    throw new Error(
+      `Gagal mengurangi stok ${this.name}. Kemungkinan stok sudah habis atau tidak mencukupi.`
+    );
+  }
+
+  // Reload untuk update instance
+  await this.reload({ transaction });
+
   return this;
 };
 
@@ -312,7 +351,13 @@ Product.getLowStock = async function () {
   return await this.findAll({
     where: {
       isActive: true,
-      [Op.or]: [sequelize.where(sequelize.col("stock"), "<=", sequelize.col("min_stock"))],
+      [Op.or]: [
+        sequelize.where(
+          sequelize.col("stock"),
+          "<=",
+          sequelize.col("min_stock")
+        ),
+      ],
     },
     order: [["stock", "ASC"]],
   });

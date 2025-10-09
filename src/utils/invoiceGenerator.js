@@ -1,6 +1,7 @@
 // ============================================
 // src/utils/invoiceGenerator.js
 // Utility untuk generate nomor invoice/faktur
+// FIXED: Race condition dengan database transaction lock
 // ============================================
 
 /**
@@ -11,11 +12,24 @@
  *
  * @param {string} saleType - 'TUNAI' atau 'KREDIT'
  * @param {Date} date - Tanggal transaksi (optional, default: sekarang)
+ * @param {object} transaction - Sequelize transaction (REQUIRED for lock)
  * @returns {Promise<string>} - Invoice number
  */
-async function generateInvoiceNumber(saleType = "TUNAI", date = new Date()) {
+async function generateInvoiceNumber(
+  saleType = "TUNAI",
+  date = new Date(),
+  transaction = null
+) {
   const Sale = require("../models/Sale");
+  const { sequelize } = require("../config/database");
   const { Op } = require("sequelize");
+
+  // ✅ FIX: Jika tidak ada transaction, throw error
+  if (!transaction) {
+    throw new Error(
+      "Transaction is required for generateInvoiceNumber to prevent race condition"
+    );
+  }
 
   // Format: MMYY
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -25,7 +39,7 @@ async function generateInvoiceNumber(saleType = "TUNAI", date = new Date()) {
   // Suffix: K untuk Kredit, T untuk Tunai
   const suffix = saleType === "KREDIT" ? "K" : "T";
 
-  // Cari invoice terakhir di bulan ini dengan type yang sama
+  // ✅ FIX: Use FOR UPDATE lock untuk prevent race condition
   const lastSale = await Sale.findOne({
     where: {
       invoiceNumber: {
@@ -34,6 +48,8 @@ async function generateInvoiceNumber(saleType = "TUNAI", date = new Date()) {
       saleType: saleType,
     },
     order: [["invoiceNumber", "DESC"]],
+    lock: transaction.LOCK.UPDATE, // ✅ CRITICAL: Database lock
+    transaction: transaction,
   });
 
   let nextNumber = 1;
@@ -56,11 +72,19 @@ async function generateInvoiceNumber(saleType = "TUNAI", date = new Date()) {
  * Format: RTN-YYYYMMDD-XXX
  * Contoh: RTN-20241008-001
  *
+ * @param {object} transaction - Sequelize transaction (REQUIRED)
  * @returns {Promise<string>} - Return number
  */
-async function generateReturnNumber() {
-  const SalesReturn = require("../models/SalesReturn");
+async function generateReturnNumber(transaction = null) {
+  const { SalesReturn } = require("../models/SalesReturn");
   const { Op } = require("sequelize");
+
+  // ✅ FIX: Require transaction
+  if (!transaction) {
+    throw new Error(
+      "Transaction is required for generateReturnNumber to prevent race condition"
+    );
+  }
 
   const date = new Date();
   const year = date.getFullYear();
@@ -68,6 +92,7 @@ async function generateReturnNumber() {
   const day = String(date.getDate()).padStart(2, "0");
   const dateStr = `${year}${month}${day}`;
 
+  // ✅ FIX: Use FOR UPDATE lock
   const lastReturn = await SalesReturn.findOne({
     where: {
       returnNumber: {
@@ -75,6 +100,8 @@ async function generateReturnNumber() {
       },
     },
     order: [["returnNumber", "DESC"]],
+    lock: transaction.LOCK.UPDATE,
+    transaction: transaction,
   });
 
   let nextNumber = 1;
@@ -93,11 +120,19 @@ async function generateReturnNumber() {
  * Format: PO-YYYYMMDD-XXX
  * Contoh: PO-20241008-001
  *
+ * @param {object} transaction - Sequelize transaction (REQUIRED)
  * @returns {Promise<string>} - Purchase order number
  */
-async function generatePurchaseNumber() {
+async function generatePurchaseNumber(transaction = null) {
   const Purchase = require("../models/Purchase");
   const { Op } = require("sequelize");
+
+  // ✅ FIX: Require transaction
+  if (!transaction) {
+    throw new Error(
+      "Transaction is required for generatePurchaseNumber to prevent race condition"
+    );
+  }
 
   const date = new Date();
   const year = date.getFullYear();
@@ -105,6 +140,7 @@ async function generatePurchaseNumber() {
   const day = String(date.getDate()).padStart(2, "0");
   const dateStr = `${year}${month}${day}`;
 
+  // ✅ FIX: Use FOR UPDATE lock
   const lastPurchase = await Purchase.findOne({
     where: {
       invoiceNumber: {
@@ -112,6 +148,8 @@ async function generatePurchaseNumber() {
       },
     },
     order: [["invoiceNumber", "DESC"]],
+    lock: transaction.LOCK.UPDATE,
+    transaction: transaction,
   });
 
   let nextNumber = 1;
@@ -130,11 +168,19 @@ async function generatePurchaseNumber() {
  * Format: PAY-YYYYMMDD-XXX
  * Contoh: PAY-20241008-001
  *
+ * @param {object} transaction - Sequelize transaction (REQUIRED)
  * @returns {Promise<string>} - Payment number
  */
-async function generatePaymentNumber() {
-  const DebtPayment = require("../models/MemberDebt").DebtPayment;
+async function generatePaymentNumber(transaction = null) {
+  const { DebtPayment } = require("../models/MemberDebt");
   const { Op } = require("sequelize");
+
+  // ✅ FIX: Require transaction
+  if (!transaction) {
+    throw new Error(
+      "Transaction is required for generatePaymentNumber to prevent race condition"
+    );
+  }
 
   const date = new Date();
   const year = date.getFullYear();
@@ -142,6 +188,7 @@ async function generatePaymentNumber() {
   const day = String(date.getDate()).padStart(2, "0");
   const dateStr = `${year}${month}${day}`;
 
+  // ✅ FIX: Use FOR UPDATE lock
   const lastPayment = await DebtPayment.findOne({
     where: {
       receiptNumber: {
@@ -149,6 +196,8 @@ async function generatePaymentNumber() {
       },
     },
     order: [["receiptNumber", "DESC"]],
+    lock: transaction.LOCK.UPDATE,
+    transaction: transaction,
   });
 
   let nextNumber = 1;
