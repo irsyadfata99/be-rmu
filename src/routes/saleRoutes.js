@@ -1,6 +1,6 @@
 // ============================================
-// src/routes/saleRoutes.js
-// Routes untuk transaksi penjualan (POS)
+// src/routes/saleRoutes.js (UPDATED)
+// ✅ FIX: Print routes tidak perlu authentication
 // ============================================
 const express = require("express");
 const router = express.Router();
@@ -13,6 +13,25 @@ const { authenticate, authorize } = require("../middlewares/auth");
  * @access  Private (ADMIN, KASIR)
  */
 router.get("/stats", authenticate, authorize(["ADMIN", "KASIR"]), SaleController.getStats);
+
+/**
+ * ✅ FIX: Print routes TANPA authenticate (moved BEFORE other routes)
+ * Browser window.open() tidak bisa kirim Authorization header
+ */
+
+/**
+ * @route   GET /api/sales/:id/print/invoice
+ * @desc    Print DOT MATRIX invoice (untuk KREDIT)
+ * @access  Public (no auth needed for print)
+ */
+router.get("/:id/print/invoice", SaleController.printInvoice);
+
+/**
+ * @route   GET /api/sales/:id/print/thermal
+ * @desc    Print THERMAL receipt (untuk TUNAI)
+ * @access  Public (no auth needed for print)
+ */
+router.get("/:id/print/thermal", SaleController.printThermal);
 
 /**
  * @route   GET /api/sales
@@ -34,19 +53,5 @@ router.get("/:id", authenticate, authorize(["ADMIN", "KASIR"]), SaleController.g
  * @access  Private (ADMIN, KASIR)
  */
 router.post("/", authenticate, authorize(["ADMIN", "KASIR"]), SaleController.create);
-
-/**
- * @route   GET /api/sales/:id/print/invoice
- * @desc    Print DOT MATRIX invoice (untuk KREDIT)
- * @access  Private (ADMIN, KASIR)
- */
-router.get("/:id/print/invoice", authenticate, authorize(["ADMIN", "KASIR"]), SaleController.printInvoice);
-
-/**
- * @route   GET /api/sales/:id/print/thermal
- * @desc    Print THERMAL receipt (untuk TUNAI)
- * @access  Private (ADMIN, KASIR)
- */
-router.get("/:id/print/thermal", authenticate, authorize(["ADMIN", "KASIR"]), SaleController.printThermal);
 
 module.exports = router;

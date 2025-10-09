@@ -1,9 +1,12 @@
-// src/utils/invoiceGenerator.js (FIXED - Complete)
 const { Op } = require("sequelize");
 
 /**
- * ✅ FIXED: Generate nomor invoice dengan transaction lock
+ * ✅ FIXED: Generate nomor invoice dengan transaction lock + TIMEOUT
  * Format: MMYY-XXX K/T
+ * @param {string} saleType - "TUNAI" or "KREDIT"
+ * @param {Date} date - Transaction date
+ * @param {Transaction} transaction - Sequelize transaction object
+ * @returns {Promise<string>} Invoice number
  */
 async function generateInvoiceNumber(saleType = "TUNAI", date = new Date(), transaction) {
   const Sale = require("../models/Sale");
@@ -18,34 +21,70 @@ async function generateInvoiceNumber(saleType = "TUNAI", date = new Date(), tran
   const prefix = `${month}${year}`;
   const suffix = saleType === "KREDIT" ? "K" : "T";
 
-  // ✅ CRITICAL: Use FOR UPDATE lock
-  const lastSale = await Sale.findOne({
-    where: {
-      invoiceNumber: {
-        [Op.like]: `${prefix}-%`,
+  // ✅ CRITICAL FIX: Add timeout to prevent deadlock
+  try {
+    const lastSale = await Sale.findOne({
+      where: {
+        invoiceNumber: {
+          [Op.like]: `${prefix}-%`,
+        },
+        saleType: saleType,
       },
-      saleType: saleType,
-    },
-    order: [["invoiceNumber", "DESC"]],
-    lock: transaction.LOCK.UPDATE,
-    transaction: transaction,
-  });
+      order: [["invoiceNumber", "DESC"]],
+      lock: transaction.LOCK.UPDATE,
+      transaction: transaction,
+      timeout: 5000, // ✅ 5 second timeout
+    });
 
-  let nextNumber = 1;
+    let nextNumber = 1;
 
-  if (lastSale) {
-    const parts = lastSale.invoiceNumber.split(" ");
-    const numberPart = parts[0].split("-")[1];
-    const lastNumber = parseInt(numberPart) || 0;
-    nextNumber = lastNumber + 1;
+    if (lastSale) {
+      const parts = lastSale.invoiceNumber.split(" ");
+      const numberPart = parts[0].split("-")[1];
+      const lastNumber = parseInt(numberPart) || 0;
+      nextNumber = lastNumber + 1;
+    }
+
+    const paddedNumber = String(nextNumber).padStart(3, "0");
+    return `${prefix}-${paddedNumber} ${suffix}`;
+  } catch (error) {
+    // ✅ If timeout, try without lock (fallback)
+    if (error.name === "SequelizeTimeoutError") {
+      console.warn("⚠️ Invoice number generation timeout, retrying without lock...");
+
+      const lastSale = await Sale.findOne({
+        where: {
+          invoiceNumber: {
+            [Op.like]: `${prefix}-%`,
+          },
+          saleType: saleType,
+        },
+        order: [["invoiceNumber", "DESC"]],
+        transaction: transaction,
+      });
+
+      let nextNumber = 1;
+
+      if (lastSale) {
+        const parts = lastSale.invoiceNumber.split(" ");
+        const numberPart = parts[0].split("-")[1];
+        const lastNumber = parseInt(numberPart) || 0;
+        nextNumber = lastNumber + 1;
+      }
+
+      const paddedNumber = String(nextNumber).padStart(3, "0");
+      return `${prefix}-${paddedNumber} ${suffix}`;
+    }
+
+    throw error;
   }
-
-  const paddedNumber = String(nextNumber).padStart(3, "0");
-  return `${prefix}-${paddedNumber} ${suffix}`;
 }
 
 /**
- * ✅ FIXED: Generate nomor pembelian dengan transaction lock
+ * ✅ FIXED: Generate nomor pembelian dengan transaction lock + timeout
+ * Format: PO-YYYYMMDD-XXX
+ * @param {Transaction} transaction - Sequelize transaction object
+ * @returns {Promise<string>} Purchase order number
  */
 async function generatePurchaseNumber(transaction) {
   const Purchase = require("../models/Purchase");
@@ -57,29 +96,60 @@ async function generatePurchaseNumber(transaction) {
   const date = new Date();
   const dateStr = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
 
-  const lastPurchase = await Purchase.findOne({
-    where: {
-      invoiceNumber: {
-        [Op.like]: `PO-${dateStr}-%`,
+  try {
+    const lastPurchase = await Purchase.findOne({
+      where: {
+        invoiceNumber: {
+          [Op.like]: `PO-${dateStr}-%`,
+        },
       },
-    },
-    order: [["invoiceNumber", "DESC"]],
-    lock: transaction.LOCK.UPDATE,
-    transaction: transaction,
-  });
+      order: [["invoiceNumber", "DESC"]],
+      lock: transaction.LOCK.UPDATE,
+      transaction: transaction,
+      timeout: 5000,
+    });
 
-  let nextNumber = 1;
-  if (lastPurchase) {
-    const lastNumber = parseInt(lastPurchase.invoiceNumber.split("-")[2]) || 0;
-    nextNumber = lastNumber + 1;
+    let nextNumber = 1;
+    if (lastPurchase) {
+      const lastNumber = parseInt(lastPurchase.invoiceNumber.split("-")[2]) || 0;
+      nextNumber = lastNumber + 1;
+    }
+
+    const paddedNumber = String(nextNumber).padStart(3, "0");
+    return `PO-${dateStr}-${paddedNumber}`;
+  } catch (error) {
+    if (error.name === "SequelizeTimeoutError") {
+      console.warn("⚠️ Purchase number generation timeout, retrying without lock...");
+
+      const lastPurchase = await Purchase.findOne({
+        where: {
+          invoiceNumber: {
+            [Op.like]: `PO-${dateStr}-%`,
+          },
+        },
+        order: [["invoiceNumber", "DESC"]],
+        transaction: transaction,
+      });
+
+      let nextNumber = 1;
+      if (lastPurchase) {
+        const lastNumber = parseInt(lastPurchase.invoiceNumber.split("-")[2]) || 0;
+        nextNumber = lastNumber + 1;
+      }
+
+      const paddedNumber = String(nextNumber).padStart(3, "0");
+      return `PO-${dateStr}-${paddedNumber}`;
+    }
+
+    throw error;
   }
-
-  const paddedNumber = String(nextNumber).padStart(3, "0");
-  return `PO-${dateStr}-${paddedNumber}`;
 }
 
 /**
- * ✅ FIXED: Generate nomor pembayaran dengan transaction lock
+ * ✅ FIXED: Generate nomor pembayaran dengan transaction lock + timeout
+ * Format: PAY-YYYYMMDD-XXX
+ * @param {Transaction} transaction - Sequelize transaction object
+ * @returns {Promise<string>} Payment receipt number
  */
 async function generatePaymentNumber(transaction) {
   const { DebtPayment } = require("../models/MemberDebt");
@@ -91,29 +161,59 @@ async function generatePaymentNumber(transaction) {
   const date = new Date();
   const dateStr = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
 
-  const lastPayment = await DebtPayment.findOne({
-    where: {
-      receiptNumber: {
-        [Op.like]: `PAY-${dateStr}-%`,
+  try {
+    const lastPayment = await DebtPayment.findOne({
+      where: {
+        receiptNumber: {
+          [Op.like]: `PAY-${dateStr}-%`,
+        },
       },
-    },
-    order: [["receiptNumber", "DESC"]],
-    lock: transaction.LOCK.UPDATE,
-    transaction: transaction,
-  });
+      order: [["receiptNumber", "DESC"]],
+      lock: transaction.LOCK.UPDATE,
+      transaction: transaction,
+      timeout: 5000,
+    });
 
-  let nextNumber = 1;
-  if (lastPayment) {
-    const lastNumber = parseInt(lastPayment.receiptNumber.split("-")[2]) || 0;
-    nextNumber = lastNumber + 1;
+    let nextNumber = 1;
+    if (lastPayment) {
+      const lastNumber = parseInt(lastPayment.receiptNumber.split("-")[2]) || 0;
+      nextNumber = lastNumber + 1;
+    }
+
+    const paddedNumber = String(nextNumber).padStart(3, "0");
+    return `PAY-${dateStr}-${paddedNumber}`;
+  } catch (error) {
+    if (error.name === "SequelizeTimeoutError") {
+      console.warn("⚠️ Payment number generation timeout, retrying without lock...");
+
+      const lastPayment = await DebtPayment.findOne({
+        where: {
+          receiptNumber: {
+            [Op.like]: `PAY-${dateStr}-%`,
+          },
+        },
+        order: [["receiptNumber", "DESC"]],
+        transaction: transaction,
+      });
+
+      let nextNumber = 1;
+      if (lastPayment) {
+        const lastNumber = parseInt(lastPayment.receiptNumber.split("-")[2]) || 0;
+        nextNumber = lastNumber + 1;
+      }
+
+      const paddedNumber = String(nextNumber).padStart(3, "0");
+      return `PAY-${dateStr}-${paddedNumber}`;
+    }
+
+    throw error;
   }
-
-  const paddedNumber = String(nextNumber).padStart(3, "0");
-  return `PAY-${dateStr}-${paddedNumber}`;
 }
 
 /**
- * Parse invoice number
+ * Parse invoice number to extract components
+ * @param {string} invoiceNumber - Invoice number to parse (e.g., "1025-001 T")
+ * @returns {object} Parsed components
  */
 function parseInvoiceNumber(invoiceNumber) {
   const parts = invoiceNumber.split(" ");

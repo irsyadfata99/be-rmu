@@ -1,6 +1,7 @@
 // ============================================
 // src/utils/printFormatter.js
 // Utility untuk format template print (Dot Matrix & Thermal)
+// ✅ FIXED: Auto-print script yang lebih reliable
 // ============================================
 const { terbilang, formatCurrency } = require("./terbilang");
 const Setting = require("../models/Setting");
@@ -10,79 +11,33 @@ const Setting = require("../models/Setting");
  * Format untuk transaksi KREDIT
  */
 async function generateDotMatrixInvoice(saleData) {
-  const {
-    invoiceNumber,
-    saleDate,
-    member,
-    items,
-    totalAmount,
-    discountAmount,
-    finalAmount,
-    dpAmount,
-    remainingDebt,
-    dueDate,
-    notes,
-  } = saleData;
+  const { invoiceNumber, saleDate, member, items, totalAmount, discountAmount, finalAmount, dpAmount, remainingDebt, dueDate, notes } = saleData;
 
   // Get settings
   const companyName = await Setting.get("company_name", "KOPERASI YAMUGHNI");
-  const companyAddress = await Setting.get(
-    "company_address",
-    "Jalan Kaum No. 4 Samping Terminal Cicaheum"
-  );
-  const companyPhone = await Setting.get(
-    "company_phone",
-    "Telepon (022) 20503787, 085877877877"
-  );
-  const companyWebsite = await Setting.get(
-    "company_website",
-    "www.yamughni.info"
-  );
+  const companyAddress = await Setting.get("company_address", "Jalan Kaum No. 4 Samping Terminal Cicaheum");
+  const companyPhone = await Setting.get("company_phone", "Telepon (022) 20503787, 085877877877");
+  const companyWebsite = await Setting.get("company_website", "www.yamughni.info");
   const companyCity = await Setting.get("company_city", "Bandung");
   const bankName = await Setting.get("bank_name", "MANDIRI");
-  const bankAccount = await Setting.get(
-    "bank_account_number",
-    "131-00-1687726-0"
-  );
-  const bankAccountName = await Setting.get(
-    "bank_account_name",
-    "KOPERASI YAMUGHNI"
-  );
+  const bankAccount = await Setting.get("bank_account_number", "131-00-1687726-0");
+  const bankAccountName = await Setting.get("bank_account_name", "KOPERASI YAMUGHNI");
 
   // Format date
-  const months = [
-    "Januari",
-    "Februari",
-    "Maret",
-    "April",
-    "Mei",
-    "Juni",
-    "Juli",
-    "Agustus",
-    "September",
-    "Oktober",
-    "November",
-    "Desember",
-  ];
+  const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
   const date = new Date(saleDate);
-  const formattedDate = `${date.getDate()} ${
-    months[date.getMonth()]
-  } ${date.getFullYear()}`;
+  const formattedDate = `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
 
   // Format due date
   let formattedDueDate = "";
   if (dueDate) {
     const dueDateObj = new Date(dueDate);
-    formattedDueDate = `${dueDateObj.getDate()} ${
-      months[dueDateObj.getMonth()]
-    } ${dueDateObj.getFullYear()}`;
+    formattedDueDate = `${dueDateObj.getDate()} ${months[dueDateObj.getMonth()]} ${dueDateObj.getFullYear()}`;
   }
 
   // Member info
   const memberName = member ? member.fullName : "UMUM";
-  const memberArea = member
-    ? `${member.regionCode} (${member.regionName})`
-    : "-";
+  const memberArea = member ? `${member.regionCode} (${member.regionName})` : "-";
   const memberId = member ? member.uniqueId : "-";
 
   // Generate items table
@@ -103,8 +58,7 @@ async function generateDotMatrixInvoice(saleData) {
   const amountWords = terbilang(finalAmount);
 
   // HTML Template
-  const html = `
-<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -162,7 +116,7 @@ async function generateDotMatrixInvoice(saleData) {
       }
       
       button {
-        display: none;
+        display: none !important;
       }
     }
   </style>
@@ -181,11 +135,7 @@ Faktur No.: ${invoiceNumber}                    ${companyCity}, ${formattedDate}
 Kepada Yth.                     ID MEMBER : ${memberId}
                                 NAMA      : ${memberName}
                                 AREA      : ${memberArea}
-                                ${
-                                  dueDate
-                                    ? `JATUH TEMPO: ${formattedDueDate}`
-                                    : ""
-                                }
+                                ${dueDate ? `JATUH TEMPO: ${formattedDueDate}` : ""}
 
 <div class="line"></div>
 No  Qty  Satuan  Nama Barang          Harga     Disc   Jumlah
@@ -194,21 +144,11 @@ ${itemsHtml}<div class="line"></div>
 
 TERBILANG: ${amountWords}
 
-                                    TOTAL FAKTUR  : ${formatCurrency(
-                                      totalAmount
-                                    )}
-Setiap pembayaran harap             JUMLAH DISC   : ${formatCurrency(
-    discountAmount
-  )}
-ditorehkan langsung ke rekening:    JUMLAH BAYAR  : ${formatCurrency(
-    finalAmount
-  )}
-${bankName}: ${bankAccount}         ${
-    dpAmount > 0 ? `DP            : ${formatCurrency(dpAmount)}` : ""
-  }
-${bankAccountName}                  SISA KREDIT   : ${formatCurrency(
-    remainingDebt
-  )}
+                                    TOTAL FAKTUR  : ${formatCurrency(totalAmount)}
+Setiap pembayaran harap             JUMLAH DISC   : ${formatCurrency(discountAmount)}
+ditorehkan langsung ke rekening:    JUMLAH BAYAR  : ${formatCurrency(finalAmount)}
+${bankName}: ${bankAccount}         ${dpAmount > 0 ? `DP            : ${formatCurrency(dpAmount)}` : ""}
+${bankAccountName}                  SISA KREDIT   : ${formatCurrency(remainingDebt)}
 
 ${notes ? `Catatan: ${notes}` : ""}
 
@@ -220,23 +160,40 @@ Yang menerima,                              Hormat Kami,
 (................)                          (................)
 <div class="line"></div>
 
-<div style="text-align: center; margin-top: 20px;">
-  <button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 4px;">
-    🖨️ PRINT
-  </button>
-  <button onclick="window.close()" style="padding: 10px 20px; font-size: 14px; cursor: pointer; background: #f44336; color: white; border: none; border-radius: 4px; margin-left: 10px;">
-    ✖ TUTUP
-  </button>
-</div>
-
-<script>
-  // Auto print saat page load
-  window.addEventListener('load', function() {
-    // Delay 500ms untuk memastikan content sudah render
-    setTimeout(function() {
+<script type="text/javascript">
+// ✅ FIX: Multiple auto-print triggers untuk reliability
+(function() {
+  var printed = false;
+  
+  function doPrint() {
+    if (!printed) {
+      printed = true;
       window.print();
-    }, 500);
-  });
+    }
+  }
+  
+  // Method 1: DOMContentLoaded
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(doPrint, 300);
+    });
+  } else {
+    // Method 2: Immediate if DOM already loaded
+    setTimeout(doPrint, 300);
+  }
+  
+  // Method 3: window.onload as fallback
+  window.onload = function() {
+    setTimeout(doPrint, 500);
+  };
+  
+  // Auto close after print
+  window.onafterprint = function() {
+    setTimeout(function() {
+      window.close();
+    }, 100);
+  };
+})();
 </script>
 </body>
 </html>`;
@@ -249,38 +206,17 @@ Yang menerima,                              Hormat Kami,
  * Format untuk transaksi TUNAI
  */
 async function generateThermalReceipt(saleData) {
-  const {
-    invoiceNumber,
-    saleDate,
-    member,
-    user,
-    items,
-    totalAmount,
-    discountAmount,
-    finalAmount,
-    paymentReceived,
-    changeAmount,
-  } = saleData;
+  const { invoiceNumber, saleDate, member, user, items, totalAmount, discountAmount, finalAmount, paymentReceived, changeAmount } = saleData;
 
   // Get settings
   const companyName = await Setting.get("company_name", "KOPERASI YAMUGHNI");
-  const companyAddress = await Setting.get(
-    "company_address",
-    "Jl. Kaum No. 4 Cicaheum"
-  );
-  const companyPhone = await Setting.get(
-    "company_phone",
-    "Telp: (022) 20503787"
-  );
+  const companyAddress = await Setting.get("company_address", "Jl. Kaum No. 4 Cicaheum");
+  const companyPhone = await Setting.get("company_phone", "Telp: (022) 20503787");
 
   // Format date & time
   const date = new Date(saleDate);
-  const formattedDate = `${String(date.getDate()).padStart(2, "0")}/${String(
-    date.getMonth() + 1
-  ).padStart(2, "0")}/${date.getFullYear()}`;
-  const formattedTime = `${String(date.getHours()).padStart(2, "0")}:${String(
-    date.getMinutes()
-  ).padStart(2, "0")}`;
+  const formattedDate = `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
+  const formattedTime = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 
   // Member info
   const memberId = member ? member.uniqueId : "-";
@@ -300,8 +236,7 @@ async function generateThermalReceipt(saleData) {
   });
 
   // HTML Template
-  const html = `
-<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -356,7 +291,7 @@ async function generateThermalReceipt(saleData) {
       }
       
       button {
-        display: none;
+        display: none !important;
       }
     }
   </style>
@@ -383,16 +318,8 @@ ${itemsHtml}</pre>
 <div class="line"></div>
 <pre>
 TOTAL             ${formatCurrency(totalAmount).padStart(16)}
-${
-  discountAmount > 0
-    ? `DISCOUNT          ${formatCurrency(discountAmount).padStart(16)}`
-    : ""
-}
-${
-  discountAmount > 0
-    ? `BAYAR             ${formatCurrency(finalAmount).padStart(16)}`
-    : ""
-}
+${discountAmount > 0 ? `DISCOUNT          ${formatCurrency(discountAmount).padStart(16)}` : ""}
+${discountAmount > 0 ? `BAYAR             ${formatCurrency(finalAmount).padStart(16)}` : ""}
 BAYAR             ${formatCurrency(paymentReceived).padStart(16)}
 KEMBALI           ${formatCurrency(changeAmount).padStart(16)}
 </pre>
@@ -403,23 +330,40 @@ Belanja Lagi Ya!
 </div>
 <div class="line"></div>
 
-<div style="text-align: center; margin-top: 10px;">
-  <button onclick="window.print()" style="padding: 8px 16px; font-size: 12px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 4px;">
-    🖨️ PRINT
-  </button>
-  <button onclick="window.close()" style="padding: 8px 16px; font-size: 12px; cursor: pointer; background: #f44336; color: white; border: none; border-radius: 4px; margin-left: 5px;">
-    ✖ TUTUP
-  </button>
-</div>
-
-<script>
-  // Auto print saat page load
-  window.addEventListener('load', function() {
-    // Delay 500ms untuk memastikan content sudah render
-    setTimeout(function() {
+<script type="text/javascript">
+// ✅ FIX: Multiple auto-print triggers untuk reliability
+(function() {
+  var printed = false;
+  
+  function doPrint() {
+    if (!printed) {
+      printed = true;
       window.print();
-    }, 500);
-  });
+    }
+  }
+  
+  // Method 1: DOMContentLoaded
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(doPrint, 300);
+    });
+  } else {
+    // Method 2: Immediate if DOM already loaded
+    setTimeout(doPrint, 300);
+  }
+  
+  // Method 3: window.onload as fallback
+  window.onload = function() {
+    setTimeout(doPrint, 500);
+  };
+  
+  // Auto close after print
+  window.onafterprint = function() {
+    setTimeout(function() {
+      window.close();
+    }, 100);
+  };
+})();
 </script>
 </body>
 </html>`;

@@ -1,5 +1,6 @@
 // ============================================
-// src/controllers/SaleController.js (COMPLETE WITH POINTS)
+// src/controllers/SaleController.js (COMPLETE WITH POINTS - FIXED)
+// ✅ FIXED: Transaction deadlock dengan proper transaction passing
 // ============================================
 const { Sale, SaleItem } = require("../models");
 const Product = require("../models/Product");
@@ -18,6 +19,7 @@ const { Op } = require("sequelize");
 class SaleController {
   // ============================================
   // POST /api/sales - Create Sale Transaction (WITH POINTS!)
+  // ✅ FIXED: Proper transaction handling untuk prevent deadlock
   // ============================================
   static async create(req, res, next) {
     const t = await sequelize.transaction();
@@ -39,7 +41,6 @@ class SaleController {
       }
 
       if (notes && notes.length > 500) {
-        // ← NEW!
         await t.rollback();
         return ApiResponse.error(res, "Catatan maksimal 500 karakter", 422);
       }
@@ -47,7 +48,7 @@ class SaleController {
       // Get member (if exists)
       let member = null;
       if (memberId) {
-        member = await Member.findByPk(memberId);
+        member = await Member.findByPk(memberId, { transaction: t });
         if (!member) {
           await t.rollback();
           return ApiResponse.error(res, "Member tidak ditemukan", 404);
@@ -95,7 +96,7 @@ class SaleController {
         });
       }
 
-      // ===== CALCULATE POINTS (NEW!) =====
+      // ===== CALCULATE POINTS =====
       const pointsResult = member
         ? await calculateTransactionPoints(processedItems)
         : {
@@ -163,7 +164,7 @@ class SaleController {
         { transaction: t }
       );
 
-      // ===== CREATE SALE ITEMS (WITH POINTS!) =====
+      // ===== CREATE SALE ITEMS & UPDATE STOCK =====
       for (const item of itemsWithPoints) {
         await SaleItem.create(
           {
@@ -174,7 +175,7 @@ class SaleController {
             unit: item.unit,
             sellingPrice: item.sellingPrice,
             subtotal: item.subtotal,
-            pointsEarned: item.pointsEarned, // NEW!
+            pointsEarned: item.pointsEarned,
           },
           { transaction: t }
         );
@@ -183,7 +184,15 @@ class SaleController {
         const product = await Product.findByPk(item.productId, {
           transaction: t,
         });
-        await product.reduceStock(item.quantity);
+
+        // ✅ CRITICAL FIX: Store stock BEFORE reduction
+        const quantityBefore = product.stock;
+
+        // ✅ CRITICAL FIX: Pass transaction to reduceStock
+        await product.reduceStock(item.quantity, t);
+
+        // ✅ CRITICAL FIX: Get stock AFTER reduction
+        const quantityAfter = product.stock;
 
         // ===== RECORD STOCK MOVEMENT =====
         await StockMovement.create(
@@ -191,8 +200,8 @@ class SaleController {
             productId: item.productId,
             type: "OUT",
             quantity: -item.quantity,
-            quantityBefore: product.stock + item.quantity,
-            quantityAfter: product.stock,
+            quantityBefore: quantityBefore,
+            quantityAfter: quantityAfter,
             referenceType: "SALE",
             referenceId: sale.id,
             notes: `Penjualan ${invoiceNumber}`,
@@ -222,7 +231,7 @@ class SaleController {
         await member.save({ transaction: t });
       }
 
-      // ===== RECORD POINTS (NEW!) =====
+      // ===== RECORD POINTS =====
       if (member && totalPointsEarned > 0) {
         await PointTransaction.recordEarn(member.id, sale.id, totalPointsEarned, `Pembelian ${invoiceNumber} - ${totalPointsEarned} point`, t);
       }
@@ -234,7 +243,7 @@ class SaleController {
         await member.save({ transaction: t });
       }
 
-      // Commit transaction
+      // ✅ COMMIT TRANSACTION
       await t.commit();
 
       // ===== LOAD COMPLETE DATA FOR RESPONSE =====
@@ -436,6 +445,10 @@ class SaleController {
   // ============================================
   // GET /api/sales/:id/print/invoice - Print Dot Matrix (KREDIT)
   // ============================================
+  // ============================================
+  // GET /api/sales/:id/print/invoice - Print Dot Matrix (KREDIT)
+  // ✅ AUTO PRINT
+  // ============================================
   static async printInvoice(req, res, next) {
     try {
       const { id } = req.params;
@@ -475,8 +488,29 @@ class SaleController {
         notes: sale.notes,
       });
 
+      // ✅ ADD: Auto-print script
+      const htmlWithPrint = html.replace(
+        "</body>",
+        `
+        <script>
+          window.onload = function() {
+            // Tunggu sebentar agar halaman fully loaded
+            setTimeout(function() {
+              window.print();
+              
+              // Optional: Auto close setelah print/cancel
+              window.onafterprint = function() {
+                window.close();
+              };
+            }, 500);
+          };
+        </script>
+      </body>
+      `
+      );
+
       res.setHeader("Content-Type", "text/html");
-      res.send(html);
+      res.send(htmlWithPrint);
     } catch (error) {
       next(error);
     }
@@ -484,6 +518,7 @@ class SaleController {
 
   // ============================================
   // GET /api/sales/:id/print/thermal - Print Thermal (TUNAI)
+  // ✅ AUTO PRINT
   // ============================================
   static async printThermal(req, res, next) {
     try {
@@ -523,8 +558,29 @@ class SaleController {
         changeAmount: sale.changeAmount,
       });
 
+      // ✅ ADD: Auto-print script
+      const htmlWithPrint = html.replace(
+        "</body>",
+        `
+        <script>
+          window.onload = function() {
+            // Tunggu sebentar agar halaman fully loaded
+            setTimeout(function() {
+              window.print();
+              
+              // Optional: Auto close setelah print/cancel
+              window.onafterprint = function() {
+                window.close();
+              };
+            }, 500);
+          };
+        </script>
+      </body>
+      `
+      );
+
       res.setHeader("Content-Type", "text/html");
-      res.send(html);
+      res.send(htmlWithPrint);
     } catch (error) {
       next(error);
     }
