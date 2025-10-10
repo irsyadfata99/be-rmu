@@ -1,7 +1,7 @@
 // ============================================
 // src/routes/paymentRoutes.js
 // Routes untuk pembayaran hutang (member & supplier)
-// FIXED: Route ordering untuk prevent path conflict
+// UPDATED: Added export endpoints
 // ============================================
 const express = require("express");
 const router = express.Router();
@@ -29,14 +29,10 @@ router.get(
 // ============================================
 
 /**
- * ✅ FIX: Route ordering - specific routes BEFORE dynamic params
- * Static routes harus di atas dynamic routes (:id)
- */
-
-/**
  * @route   GET /api/payments/member-debts
  * @desc    Get all member debts with pagination
  * @access  Private (ADMIN, KASIR)
+ * ✨ ENHANCED: Better search, filter by region, date range
  */
 router.get(
   "/member-debts",
@@ -46,7 +42,19 @@ router.get(
 );
 
 /**
- * ✅ FIX: Moved BEFORE /:debtId route
+ * ✨ NEW ROUTE
+ * @route   GET /api/payments/member-debts/export
+ * @desc    Export member debts to Excel
+ * @access  Private (ADMIN, KASIR)
+ */
+router.get(
+  "/member-debts/export",
+  authenticate,
+  authorize(["ADMIN", "KASIR"]),
+  PaymentController.exportMemberDebts
+);
+
+/**
  * @route   GET /api/payments/member-debts/member/:memberId
  * @desc    Get all debts by specific member
  * @access  Private (ADMIN, KASIR)
@@ -90,6 +98,7 @@ router.post(
  * @route   GET /api/payments/supplier-debts
  * @desc    Get all supplier debts with pagination
  * @access  Private (ADMIN, KASIR)
+ * ✨ ENHANCED: Better search, date range filter
  */
 router.get(
   "/supplier-debts",
@@ -99,7 +108,19 @@ router.get(
 );
 
 /**
- * ✅ FIX: Moved BEFORE /:debtId route
+ * ✨ NEW ROUTE
+ * @route   GET /api/payments/supplier-debts/export
+ * @desc    Export supplier debts to Excel
+ * @access  Private (ADMIN, KASIR)
+ */
+router.get(
+  "/supplier-debts/export",
+  authenticate,
+  authorize(["ADMIN", "KASIR"]),
+  PaymentController.exportSupplierDebts
+);
+
+/**
  * @route   GET /api/payments/supplier-debts/supplier/:supplierId/list
  * @desc    Get all debts to specific supplier
  * @access  Private (ADMIN, KASIR)

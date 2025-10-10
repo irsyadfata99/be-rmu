@@ -194,5 +194,84 @@ const Sale = sequelize.define(
   }
 );
 
-// ✅ EXPORT ONLY Sale (associations in index.js)
+/**
+ * After create sale, automatically record points if:
+ * - Sale has memberId
+ * - Point system is enabled
+ * - Items exist
+ */
+Sale.afterCreate(async (sale, options) => {
+  try {
+    // Only process if member exists
+    if (!sale.memberId) {
+      console.log(`⏭️  Skip points - No member for sale ${sale.invoiceNumber}`);
+      return;
+    }
+
+    // Check if point system is enabled
+    const Setting = require("./Setting");
+    const pointEnabled = await Setting.get("point_enabled");
+
+    if (!pointEnabled || pointEnabled === "false") {
+      console.log(`⏭️  Skip points - Point system disabled`);
+      return;
+    }
+
+    // Import dependencies
+    const PointTransaction = require("./PointTransaction");
+    const SaleItem = require("./SaleItem");
+    const { calculateTransactionPoints } = require("../utils/pointCalculator");
+
+    // Get sale items
+    const saleItems = await SaleItem.findAll({
+      where: { saleId: sale.id },
+      transaction: options.transaction,
+    });
+
+    if (saleItems.length === 0) {
+      console.log(`⏭️  Skip points - No items for sale ${sale.invoiceNumber}`);
+      return;
+    }
+
+    // Prepare items for point calculation
+    const items = saleItems.map((item) => ({
+      productId: item.productId,
+      productName: item.productName,
+      quantity: item.quantity,
+      subtotal: parseFloat(item.subtotal),
+      sellingPrice: parseFloat(item.sellingPrice),
+    }));
+
+    // Calculate points
+    const pointResult = await calculateTransactionPoints(items);
+
+    // If points > 0, record EARN transaction
+    if (pointResult.totalPoints > 0) {
+      await PointTransaction.recordEarn(
+        sale.memberId,
+        sale.id,
+        pointResult.totalPoints,
+        `Dapat point dari pembelian #${sale.invoiceNumber}`,
+        options.transaction
+      );
+
+      console.log(
+        `✅ Points earned: ${pointResult.totalPoints} points for sale ${sale.invoiceNumber} (Member: ${sale.memberId})`
+      );
+    } else {
+      const reason = pointResult.reason || "Point calculation returned 0";
+      console.log(
+        `ℹ️  No points earned for sale ${sale.invoiceNumber}. Reason: ${reason}`
+      );
+    }
+  } catch (error) {
+    console.error(
+      `❌ Error recording points for sale ${sale.invoiceNumber}:`,
+      error.message
+    );
+    // Don't throw error to prevent sale creation failure
+    // Just log it for monitoring
+  }
+});
+
 module.exports = Sale;

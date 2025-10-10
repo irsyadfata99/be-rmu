@@ -14,6 +14,7 @@
     "seed:suppliers": "node src/seeders/seedSuppliers.js",
     "seed:categories": "node src/seeders/seedCategories.js",
     "seed:settings": "node src/seeders/seedSettings.js",
+    "seed:points": "node src/seeders/seedPoints.js",
     "seed:all": "npm run seed:admin && npm run seed:categories && npm run seed:suppliers && npm run seed:products && npm run seed:members && npm run seed:settings",
     "pm2:start": "pm2 start ecosystem.config.js",
     "pm2:start:prod": "pm2 start ecosystem.config.js --env production",

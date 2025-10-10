@@ -1,6 +1,7 @@
 // ============================================
-// src/routes/pointRoutes.js (NEW)
+// src/routes/pointRoutes.js
 // Routes untuk Point Management
+// UPDATED: Added export endpoint
 // ============================================
 const express = require("express");
 const router = express.Router();
@@ -31,7 +32,11 @@ router.get("/member/:memberId", authenticate, PointController.getMemberSummary);
  * @access  Private
  * @query   page, limit, type (EARN|REDEEM|ADJUSTMENT|EXPIRED)
  */
-router.get("/member/:memberId/history", authenticate, PointController.getMemberHistory);
+router.get(
+  "/member/:memberId/history",
+  authenticate,
+  PointController.getMemberHistory
+);
 
 /**
  * @route   POST /api/points/preview
@@ -47,7 +52,11 @@ router.post("/preview", authenticate, PointController.previewCalculation);
  * @access  Private
  * @body    { memberId, pointsToRedeem, transactionAmount }
  */
-router.post("/validate-redemption", authenticate, PointController.validateRedemption);
+router.post(
+  "/validate-redemption",
+  authenticate,
+  PointController.validateRedemption
+);
 
 /**
  * @route   POST /api/points/redeem
@@ -67,7 +76,12 @@ router.post("/redeem", authenticate, PointController.redeemPoints);
  * @access  Private (ADMIN only)
  * @body    { pointEnabled?, pointSystemMode?, pointPerAmount?, etc }
  */
-router.put("/settings", authenticate, authorize(["ADMIN"]), PointController.updateSettings);
+router.put(
+  "/settings",
+  authenticate,
+  authorize(["ADMIN"]),
+  PointController.updateSettings
+);
 
 /**
  * @route   POST /api/points/adjust
@@ -75,21 +89,51 @@ router.put("/settings", authenticate, authorize(["ADMIN"]), PointController.upda
  * @access  Private (ADMIN only)
  * @body    { memberId, points, description, notes? }
  */
-router.post("/adjust", authenticate, authorize(["ADMIN"]), PointController.adjustPoints);
+router.post(
+  "/adjust",
+  authenticate,
+  authorize(["ADMIN"]),
+  PointController.adjustPoints
+);
 
 /**
  * @route   POST /api/points/expire
  * @desc    Run point expiration process (expire old points)
  * @access  Private (ADMIN only)
  */
-router.post("/expire", authenticate, authorize(["ADMIN"]), PointController.expirePoints);
+router.post(
+  "/expire",
+  authenticate,
+  authorize(["ADMIN"]),
+  PointController.expirePoints
+);
 
 /**
  * @route   GET /api/points/transactions
  * @desc    Get all point transactions (for admin monitoring)
  * @access  Private (ADMIN only)
- * @query   page, limit, type, memberId
+ * @query   page, limit, type, memberId, search, startDate, endDate
+ * ✨ ENHANCED: Better search, date range, flexible sorting
  */
-router.get("/transactions", authenticate, authorize(["ADMIN"]), PointController.getAllTransactions);
+router.get(
+  "/transactions",
+  authenticate,
+  authorize(["ADMIN"]),
+  PointController.getAllTransactions
+);
+
+/**
+ * ✨ NEW ROUTE
+ * @route   GET /api/points/transactions/export
+ * @desc    Export point transactions to Excel
+ * @access  Private (ADMIN only)
+ * @query   type, memberId, search, startDate, endDate, sortBy, sortOrder
+ */
+router.get(
+  "/transactions/export",
+  authenticate,
+  authorize(["ADMIN"]),
+  PointController.exportTransactions
+);
 
 module.exports = router;
