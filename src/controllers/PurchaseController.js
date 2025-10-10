@@ -1,5 +1,5 @@
 // ============================================
-// src/controllers/PurchaseController.js
+// src/controllers/PurchaseController.js (FIXED - Added searchByInvoice)
 // Controller untuk transaksi pembelian (barang masuk)
 // ============================================
 const {
@@ -68,9 +68,7 @@ class PurchaseController {
         );
       }
 
-      // In create() method, after other validations (around line 40):
       if (notes && notes.length > 500) {
-        // ← NEW!
         await t.rollback();
         return ApiResponse.error(res, "Catatan maksimal 500 karakter", 422);
       }
@@ -340,6 +338,69 @@ class PurchaseController {
         rows,
         pagination,
         "Pembelian berhasil diambil"
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ============================================
+  // GET /api/purchases/search/:invoiceNumber - Search Purchase by Invoice
+  // ✅ NEW METHOD - For purchase return functionality
+  // ============================================
+  static async searchByInvoice(req, res, next) {
+    try {
+      const { invoiceNumber } = req.params;
+
+      const purchase = await Purchase.findOne({
+        where: { invoiceNumber },
+        include: [
+          {
+            model: PurchaseItem,
+            as: "items",
+            include: [
+              {
+                model: Product,
+                as: "product",
+                attributes: ["id", "name", "unit"],
+              },
+            ],
+          },
+          {
+            model: Supplier,
+            as: "supplier",
+            attributes: ["id", "code", "name", "phone"],
+          },
+        ],
+      });
+
+      if (!purchase) {
+        return ApiResponse.notFound(res, "Transaksi pembelian tidak ditemukan");
+      }
+
+      // Format response for return form
+      const formattedPurchase = {
+        id: purchase.id,
+        invoiceNumber: purchase.invoiceNumber,
+        purchaseDate: purchase.purchaseDate,
+        totalAmount: purchase.totalAmount,
+        purchaseType: purchase.purchaseType,
+        status: purchase.status,
+        supplier: purchase.supplier,
+        items: purchase.items.map((item) => ({
+          productId: item.productId,
+          productName: item.product.name,
+          unit: item.product.unit,
+          quantity: item.quantity,
+          purchasePrice: item.purchasePrice,
+          subtotal: item.subtotal,
+        })),
+      };
+
+      return ApiResponse.success(
+        res,
+        formattedPurchase,
+        "Transaksi pembelian ditemukan"
       );
     } catch (error) {
       next(error);
