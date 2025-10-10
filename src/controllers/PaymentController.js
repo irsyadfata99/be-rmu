@@ -1,5 +1,6 @@
 // ============================================
-// IMPORTS
+// src/controllers/PaymentController.js
+// PRODUCTION READY - Complete Payment & Debt Management
 // ============================================
 const ExcelExporter = require("../utils/excelExporter");
 const {
@@ -13,14 +14,16 @@ const {
 } = require("../models");
 const { Op } = require("sequelize");
 const ApiResponse = require("../utils/response");
+const { sequelize } = require("../config/database");
 
 // ============================================
 // PAYMENT CONTROLLER CLASS
 // ============================================
 class PaymentController {
   /**
-   * GET /api/payments/member-debts - List all member debts
-   * ENHANCED: Better search, filter by region, sort options
+   * GET /api/payments/member-debts
+   * @desc List all member debts with advanced filtering
+   * @access Private (ADMIN, KASIR)
    */
   static async getMemberDebts(req, res, next) {
     try {
@@ -31,16 +34,16 @@ class PaymentController {
         status,
         overdue = false,
         search = "",
-        regionCode = "", // ✨ NEW: Filter by region
+        regionCode = "",
         sortBy = "createdAt",
         sortOrder = "DESC",
-        startDate, // ✨ NEW: Date range filter
-        endDate, // ✨ NEW: Date range filter
+        startDate,
+        endDate,
       } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const whereClause = {};
-      const memberWhereClause = {}; // ✨ NEW: For member filtering
+      const memberWhereClause = {};
 
       // Filter by member
       if (memberId) {
@@ -62,7 +65,7 @@ class PaymentController {
         };
       }
 
-      // ✨ NEW: Date range filter
+      // Date range filter
       if (startDate || endDate) {
         whereClause.createdAt = {};
         if (startDate) {
@@ -73,20 +76,17 @@ class PaymentController {
         }
       }
 
-      // ✨ ENHANCED: Search by invoice, member name, or uniqueId
+      // Search by invoice
       if (search) {
-        whereClause[Op.or] = [
-          { invoiceNumber: { [Op.like]: `%${search}%` } },
-          // Search in member will be handled in include
-        ];
+        whereClause[Op.or] = [{ invoiceNumber: { [Op.like]: `%${search}%` } }];
       }
 
-      // ✨ NEW: Filter by region
+      // Filter by region
       if (regionCode) {
         memberWhereClause.regionCode = regionCode;
       }
 
-      // ✨ ENHANCED: Member search in include
+      // Member search in include
       if (search) {
         memberWhereClause[Op.or] = [
           { fullName: { [Op.like]: `%${search}%` } },
@@ -115,7 +115,7 @@ class PaymentController {
               Object.keys(memberWhereClause).length > 0
                 ? memberWhereClause
                 : undefined,
-            required: Object.keys(memberWhereClause).length > 0, // ✨ Inner join if filtering
+            required: Object.keys(memberWhereClause).length > 0,
           },
           {
             model: Sale,
@@ -138,6 +138,13 @@ class PaymentController {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
 
+      res.setHeader(
+        "Cache-Control",
+        "no-store, no-cache, must-revalidate, private"
+      );
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+
       return ApiResponse.paginated(
         res,
         rows,
@@ -150,8 +157,9 @@ class PaymentController {
   }
 
   /**
-   * GET /api/payments/supplier-debts - List all supplier debts
-   * ENHANCED: Better search, filter options
+   * GET /api/payments/supplier-debts
+   * @desc List all supplier debts with advanced filtering
+   * @access Private (ADMIN, KASIR)
    */
   static async getSupplierDebts(req, res, next) {
     try {
@@ -164,25 +172,17 @@ class PaymentController {
         search = "",
         sortBy = "createdAt",
         sortOrder = "DESC",
-        startDate, // ✨ NEW: Date range filter
-        endDate, // ✨ NEW: Date range filter
+        startDate,
+        endDate,
       } = req.query;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       const whereClause = {};
-      const supplierWhereClause = {}; // ✨ NEW: For supplier filtering
+      const supplierWhereClause = {};
 
-      // Filter by supplier
-      if (supplierId) {
-        whereClause.supplierId = supplierId;
-      }
+      if (supplierId) whereClause.supplierId = supplierId;
+      if (status) whereClause.status = status;
 
-      // Filter by status
-      if (status) {
-        whereClause.status = status;
-      }
-
-      // Filter overdue
       if (overdue === "true") {
         whereClause.dueDate = {
           [Op.lt]: new Date(),
@@ -192,18 +192,12 @@ class PaymentController {
         };
       }
 
-      // ✨ NEW: Date range filter
       if (startDate || endDate) {
         whereClause.createdAt = {};
-        if (startDate) {
-          whereClause.createdAt[Op.gte] = new Date(startDate);
-        }
-        if (endDate) {
-          whereClause.createdAt[Op.lte] = new Date(endDate);
-        }
+        if (startDate) whereClause.createdAt[Op.gte] = new Date(startDate);
+        if (endDate) whereClause.createdAt[Op.lte] = new Date(endDate);
       }
 
-      // ✨ ENHANCED: Search by invoice or supplier name
       if (search) {
         whereClause[Op.or] = [{ invoiceNumber: { [Op.like]: `%${search}%` } }];
         supplierWhereClause[Op.or] = [
@@ -243,6 +237,13 @@ class PaymentController {
         totalPages: Math.ceil(count / parseInt(limit)),
       };
 
+      res.setHeader(
+        "Cache-Control",
+        "no-store, no-cache, must-revalidate, private"
+      );
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+
       return ApiResponse.paginated(
         res,
         rows,
@@ -273,7 +274,6 @@ class PaymentController {
         sortOrder = "DESC",
       } = req.query;
 
-      // Build where clause (same as getMemberDebts)
       const whereClause = {};
       const memberWhereClause = {};
 
@@ -301,7 +301,6 @@ class PaymentController {
 
       if (regionCode) memberWhereClause.regionCode = regionCode;
 
-      // Fetch all data (no pagination for export)
       const debts = await MemberDebt.findAll({
         where: whereClause,
         order: [[sortBy, sortOrder.toUpperCase()]],
@@ -331,7 +330,6 @@ class PaymentController {
         ],
       });
 
-      // Prepare data for Excel
       const excelData = debts.map((debt) => ({
         invoiceNumber: debt.invoiceNumber,
         memberUniqueId: debt.member?.uniqueId || "-",
@@ -348,7 +346,6 @@ class PaymentController {
         daysOverdue: debt.getDaysOverdue(),
       }));
 
-      // Define columns
       const columns = [
         { header: "No. Faktur", key: "invoiceNumber", width: 15 },
         { header: "ID Member", key: "memberUniqueId", width: 12 },
@@ -365,7 +362,6 @@ class PaymentController {
         { header: "Hari Terlambat", key: "daysOverdue", width: 15 },
       ];
 
-      // Calculate summary
       const totalDebt = debts.reduce(
         (sum, d) => sum + parseFloat(d.totalAmount),
         0
@@ -388,7 +384,6 @@ class PaymentController {
         "Jatuh Tempo": overdueCount,
       };
 
-      // Prepare filters for display
       const filters = {};
       if (status) filters.Status = status;
       if (regionCode) filters.Wilayah = regionCode;
@@ -403,7 +398,6 @@ class PaymentController {
           "id-ID"
         );
 
-      // Generate Excel
       const buffer = await ExcelExporter.exportToExcel(
         excelData,
         columns,
@@ -415,7 +409,6 @@ class PaymentController {
         }
       );
 
-      // Set response headers
       const filename = `Piutang-Member-${
         new Date().toISOString().split("T")[0]
       }.xlsx`;
@@ -457,7 +450,6 @@ class PaymentController {
         sortOrder = "DESC",
       } = req.query;
 
-      // Build where clause (same as getSupplierDebts)
       const whereClause = {};
       const supplierWhereClause = {};
 
@@ -483,7 +475,6 @@ class PaymentController {
         ];
       }
 
-      // Fetch all data (no pagination for export)
       const debts = await SupplierDebt.findAll({
         where: whereClause,
         order: [[sortBy, sortOrder.toUpperCase()]],
@@ -506,7 +497,6 @@ class PaymentController {
         ],
       });
 
-      // Prepare data for Excel
       const excelData = debts.map((debt) => ({
         invoiceNumber: debt.invoiceNumber,
         supplierCode: debt.supplier?.code || "-",
@@ -525,7 +515,6 @@ class PaymentController {
         daysOverdue: debt.getDaysOverdue(),
       }));
 
-      // Define columns
       const columns = [
         { header: "No. Faktur", key: "invoiceNumber", width: 15 },
         { header: "Kode Supplier", key: "supplierCode", width: 12 },
@@ -542,7 +531,6 @@ class PaymentController {
         { header: "Hari Terlambat", key: "daysOverdue", width: 15 },
       ];
 
-      // Calculate summary
       const totalDebt = debts.reduce(
         (sum, d) => sum + parseFloat(d.totalAmount),
         0
@@ -565,7 +553,6 @@ class PaymentController {
         "Jatuh Tempo": overdueCount,
       };
 
-      // Prepare filters for display
       const filters = {};
       if (status) filters.Status = status;
       if (overdue === "true") filters.Filter = "Jatuh Tempo Saja";
@@ -579,7 +566,6 @@ class PaymentController {
           "id-ID"
         );
 
-      // Generate Excel
       const buffer = await ExcelExporter.exportToExcel(
         excelData,
         columns,
@@ -591,7 +577,6 @@ class PaymentController {
         }
       );
 
-      // Set response headers
       const filename = `Hutang-Supplier-${
         new Date().toISOString().split("T")[0]
       }.xlsx`;
@@ -622,15 +607,67 @@ class PaymentController {
    */
   static async getStats(req, res, next) {
     try {
-      // TODO: Implement payment statistics
-      return res.json({
-        success: true,
-        message: "Payment stats - Coming soon",
-        data: {
-          memberDebts: { total: 0, paid: 0, pending: 0 },
-          supplierDebts: { total: 0, paid: 0, pending: 0 },
+      // Member Debts Stats
+      const memberDebtsTotal = await MemberDebt.sum("remainingAmount", {
+        where: { status: { [Op.in]: ["PENDING", "PARTIAL"] } },
+      });
+
+      const memberDebtsPaid = await MemberDebt.sum("paidAmount");
+
+      const memberDebtsPending = await MemberDebt.count({
+        where: { status: "PENDING" },
+      });
+
+      const memberDebtsOverdue = await MemberDebt.count({
+        where: {
+          dueDate: { [Op.lt]: new Date() },
+          status: { [Op.in]: ["PENDING", "PARTIAL"] },
         },
       });
+
+      // Supplier Debts Stats
+      const supplierDebtsTotal = await SupplierDebt.sum("remainingAmount", {
+        where: { status: { [Op.in]: ["PENDING", "PARTIAL"] } },
+      });
+
+      const supplierDebtsPaid = await SupplierDebt.sum("paidAmount");
+
+      const supplierDebtsPending = await SupplierDebt.count({
+        where: { status: "PENDING" },
+      });
+
+      const supplierDebtsOverdue = await SupplierDebt.count({
+        where: {
+          dueDate: { [Op.lt]: new Date() },
+          status: { [Op.in]: ["PENDING", "PARTIAL"] },
+        },
+      });
+
+      res.setHeader(
+        "Cache-Control",
+        "no-store, no-cache, must-revalidate, private"
+      );
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+
+      return ApiResponse.success(
+        res,
+        {
+          memberDebts: {
+            total: parseFloat(memberDebtsTotal || 0),
+            paid: parseFloat(memberDebtsPaid || 0),
+            pending: memberDebtsPending,
+            overdue: memberDebtsOverdue,
+          },
+          supplierDebts: {
+            total: parseFloat(supplierDebtsTotal || 0),
+            paid: parseFloat(supplierDebtsPaid || 0),
+            pending: supplierDebtsPending,
+            overdue: supplierDebtsOverdue,
+          },
+        },
+        "Payment statistics retrieved successfully"
+      );
     } catch (error) {
       next(error);
     }
@@ -657,6 +694,11 @@ class PaymentController {
             model: Sale,
             as: "sale",
             attributes: ["id", "invoiceNumber", "saleDate"],
+          },
+          {
+            model: DebtPayment,
+            as: "payments",
+            order: [["paymentDate", "DESC"]],
           },
         ],
         order: [["createdAt", "DESC"]],
@@ -727,23 +769,86 @@ class PaymentController {
    * @access Private (ADMIN, KASIR)
    */
   static async payMemberDebt(req, res, next) {
+    const t = await sequelize.transaction();
+
     try {
       const { debtId } = req.params;
-      const { amount, paymentMethod, notes } = req.body;
+      const { amount, paymentMethod = "CASH", notes } = req.body;
 
-      // TODO: Implement payment logic with transaction
+      // Validate amount
+      if (!amount || amount <= 0) {
+        await t.rollback();
+        return ApiResponse.validationError(
+          res,
+          { amount: "Amount must be greater than 0" },
+          "Invalid payment amount"
+        );
+      }
+
+      // Get debt
+      const debt = await MemberDebt.findByPk(debtId, { transaction: t });
+
+      if (!debt) {
+        await t.rollback();
+        return ApiResponse.notFound(res, "Member debt not found");
+      }
+
+      // Check if amount exceeds remaining
+      if (parseFloat(amount) > parseFloat(debt.remainingAmount)) {
+        await t.rollback();
+        return ApiResponse.validationError(
+          res,
+          {
+            amount: `Amount exceeds remaining debt: Rp ${debt.remainingAmount}`,
+          },
+          "Payment amount too high"
+        );
+      }
+
+      // Record payment
+      const payment = await debt.addPayment(
+        parseFloat(amount),
+        req.user.id,
+        paymentMethod,
+        notes
+      );
+
+      await t.commit();
+
+      // Reload debt with relations
+      await debt.reload({
+        include: [
+          {
+            model: Member,
+            as: "member",
+            attributes: ["id", "uniqueId", "fullName"],
+          },
+          {
+            model: DebtPayment,
+            as: "payments",
+            order: [["paymentDate", "DESC"]],
+          },
+        ],
+      });
+
+      console.log(
+        `✅ Payment recorded: Rp ${amount} for debt ${debt.invoiceNumber} by ${req.user.name}`
+      );
+
       return ApiResponse.success(
         res,
-        null,
-        "Payment recorded successfully - Implementation pending"
+        { debt, payment },
+        "Payment recorded successfully"
       );
     } catch (error) {
+      await t.rollback();
+      console.error("❌ Error recording payment:", error);
       next(error);
     }
   }
 
   /**
-   * GET /api/payments/supplier-debts/supplier/:supplierId/list
+   * GET /api/payments/supplier-debts/supplier/:supplierId
    * @desc Get all debts to specific supplier
    * @access Private (ADMIN, KASIR)
    */
@@ -822,17 +927,76 @@ class PaymentController {
    * @access Private (ADMIN, KASIR)
    */
   static async paySupplierDebt(req, res, next) {
+    const t = await sequelize.transaction();
+
     try {
       const { debtId } = req.params;
-      const { amount, paymentMethod, notes } = req.body;
+      const { amount, paymentMethod = "CASH", notes } = req.body;
 
-      // TODO: Implement payment logic with transaction
-      return ApiResponse.success(
-        res,
-        null,
-        "Payment recorded successfully - Implementation pending"
+      // Validate amount
+      if (!amount || amount <= 0) {
+        await t.rollback();
+        return ApiResponse.validationError(
+          res,
+          { amount: "Amount must be greater than 0" },
+          "Invalid payment amount"
+        );
+      }
+
+      // Get debt
+      const debt = await SupplierDebt.findByPk(debtId, { transaction: t });
+
+      if (!debt) {
+        await t.rollback();
+        return ApiResponse.notFound(res, "Supplier debt not found");
+      }
+
+      // Check if amount exceeds remaining
+      if (parseFloat(amount) > parseFloat(debt.remainingAmount)) {
+        await t.rollback();
+        return ApiResponse.validationError(
+          res,
+          {
+            amount: `Amount exceeds remaining debt: Rp ${debt.remainingAmount}`,
+          },
+          "Payment amount too high"
+        );
+      }
+
+      // Record payment
+      await debt.addPayment(
+        parseFloat(amount),
+        req.user.id,
+        paymentMethod,
+        notes
       );
+
+      await t.commit();
+
+      // Reload debt with relations
+      await debt.reload({
+        include: [
+          {
+            model: Supplier,
+            as: "supplier",
+            attributes: ["id", "code", "name"],
+          },
+          {
+            model: Purchase,
+            as: "purchase",
+            attributes: ["id", "invoiceNumber"],
+          },
+        ],
+      });
+
+      console.log(
+        `✅ Payment recorded: Rp ${amount} for supplier debt ${debt.invoiceNumber} by ${req.user.name}`
+      );
+
+      return ApiResponse.success(res, debt, "Payment recorded successfully");
     } catch (error) {
+      await t.rollback();
+      console.error("❌ Error recording supplier payment:", error);
       next(error);
     }
   }

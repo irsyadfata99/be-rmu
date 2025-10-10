@@ -1,18 +1,22 @@
 // ============================================
-// IMPORTS
+// src/controllers/PointController.js
+// PRODUCTION READY - Complete Point System Management
 // ============================================
 const ExcelExporter = require("../utils/excelExporter");
-const { PointTransaction, Member } = require("../models");
+const { PointTransaction, Member, Sale } = require("../models");
 const { Op } = require("sequelize");
 const ApiResponse = require("../utils/response");
+const { sequelize } = require("../config/database");
+const Setting = require("../models/Setting");
 
 // ============================================
 // POINT CONTROLLER CLASS
 // ============================================
 class PointController {
   /**
-   * GET /api/points/transactions - Get All Point Transactions (ADMIN)
-   * ENHANCED: Better search, date range filter, flexible sorting
+   * GET /api/points/transactions
+   * @desc Get all point transactions with advanced filtering
+   * @access Private (ADMIN)
    */
   static async getAllTransactions(req, res, next) {
     try {
@@ -21,22 +25,21 @@ class PointController {
         limit = 20,
         type,
         memberId,
-        search = "", // ✨ NEW: Search member name/uniqueId
-        startDate, // ✨ NEW: Date range
-        endDate, // ✨ NEW: Date range
-        sortBy = "created_at", // ✨ NEW: Flexible sorting
-        sortOrder = "DESC", // ✨ NEW: Flexible sorting
+        search = "",
+        startDate,
+        endDate,
+        sortBy = "created_at",
+        sortOrder = "DESC",
       } = req.query;
 
       const offset = (page - 1) * limit;
-
       const whereClause = {};
-      const memberWhereClause = {}; // ✨ NEW: For member search
+      const memberWhereClause = {};
 
       if (type) whereClause.type = type;
       if (memberId) whereClause.memberId = memberId;
 
-      // ✨ NEW: Date range filter
+      // Date range filter
       if (startDate || endDate) {
         whereClause.createdAt = {};
         if (startDate) {
@@ -45,9 +48,9 @@ class PointController {
         if (endDate) {
           whereClause.createdAt[Op.lte] = new Date(endDate);
         }
-      } // ⚠️ FIX: Added missing closing brace
+      }
 
-      // ✨ NEW: Search member by name or uniqueId
+      // Search member by name or uniqueId
       if (search) {
         memberWhereClause[Op.or] = [
           { fullName: { [Op.like]: `%${search}%` } },
@@ -57,7 +60,7 @@ class PointController {
 
       const { rows, count } = await PointTransaction.findAndCountAll({
         where: whereClause,
-        order: [[sortBy, sortOrder.toUpperCase()]], // ✨ ENHANCED: Flexible sorting
+        order: [[sortBy, sortOrder.toUpperCase()]],
         limit: parseInt(limit),
         offset,
         include: [
@@ -70,12 +73,19 @@ class PointController {
               "fullName",
               "regionCode",
               "regionName",
+              "totalPoints",
             ],
             where:
               Object.keys(memberWhereClause).length > 0
                 ? memberWhereClause
                 : undefined,
-            required: Object.keys(memberWhereClause).length > 0, // ✨ Inner join if searching
+            required: Object.keys(memberWhereClause).length > 0,
+          },
+          {
+            model: Sale,
+            as: "sale",
+            attributes: ["id", "invoiceNumber", "finalAmount"],
+            required: false,
           },
         ],
       });
@@ -114,7 +124,6 @@ class PointController {
         sortOrder = "DESC",
       } = req.query;
 
-      // Build where clause (same as getAllTransactions)
       const whereClause = {};
       const memberWhereClause = {};
 
@@ -134,7 +143,6 @@ class PointController {
         ];
       }
 
-      // Fetch all data (no pagination for export)
       const transactions = await PointTransaction.findAll({
         where: whereClause,
         order: [[sortBy, sortOrder.toUpperCase()]],
@@ -157,7 +165,7 @@ class PointController {
             required: Object.keys(memberWhereClause).length > 0,
           },
           {
-            model: require("../models/Sale"),
+            model: Sale,
             as: "sale",
             attributes: ["id", "invoiceNumber", "finalAmount"],
             required: false,
@@ -165,37 +173,32 @@ class PointController {
         ],
       });
 
-      // Prepare data for Excel
-      const excelData = transactions.map((trx) => {
-        // Format type
-        const typeMap = {
-          EARN: "📈 Dapat Point",
-          REDEEM: "📉 Tukar Point",
-          ADJUSTMENT: "⚙️ Penyesuaian",
-          EXPIRED: "⏰ Kadaluarsa",
-        };
+      const typeMap = {
+        EARN: "📈 Dapat Point",
+        REDEEM: "📉 Tukar Point",
+        ADJUSTMENT: "⚙️ Penyesuaian",
+        EXPIRED: "⏰ Kadaluarsa",
+      };
 
-        return {
-          date: new Date(trx.createdAt),
-          memberUniqueId: trx.member?.uniqueId || "-",
-          memberName: trx.member?.fullName || "-",
-          regionName: trx.member?.regionName || "-",
-          type: typeMap[trx.type] || trx.type,
-          points: trx.points,
-          pointsBefore: trx.pointsBefore,
-          pointsAfter: trx.pointsAfter,
-          currentPoints: trx.member?.totalPoints || 0,
-          description: trx.description,
-          saleInvoice: trx.sale?.invoiceNumber || "-",
-          saleAmount: trx.sale?.finalAmount
-            ? ExcelExporter.formatCurrency(trx.sale.finalAmount)
-            : "-",
-          expiryDate: trx.expiryDate ? new Date(trx.expiryDate) : "-",
-          isExpired: trx.isExpired ? "Ya" : "Tidak",
-        };
-      });
+      const excelData = transactions.map((trx) => ({
+        date: new Date(trx.createdAt),
+        memberUniqueId: trx.member?.uniqueId || "-",
+        memberName: trx.member?.fullName || "-",
+        regionName: trx.member?.regionName || "-",
+        type: typeMap[trx.type] || trx.type,
+        points: trx.points,
+        pointsBefore: trx.pointsBefore,
+        pointsAfter: trx.pointsAfter,
+        currentPoints: trx.member?.totalPoints || 0,
+        description: trx.description,
+        saleInvoice: trx.sale?.invoiceNumber || "-",
+        saleAmount: trx.sale?.finalAmount
+          ? ExcelExporter.formatCurrency(trx.sale.finalAmount)
+          : "-",
+        expiryDate: trx.expiryDate ? new Date(trx.expiryDate) : "-",
+        isExpired: trx.isExpired ? "Ya" : "Tidak",
+      }));
 
-      // Define columns
       const columns = [
         { header: "Tanggal", key: "date", width: 18 },
         { header: "ID Member", key: "memberUniqueId", width: 12 },
@@ -213,7 +216,6 @@ class PointController {
         { header: "Expired", key: "isExpired", width: 10 },
       ];
 
-      // Calculate summary
       const totalEarned = transactions
         .filter((t) => t.type === "EARN")
         .reduce((sum, t) => sum + t.points, 0);
@@ -248,16 +250,15 @@ class PointController {
         ).toLocaleString("id-ID"),
       };
 
-      // Prepare filters for display
       const filters = {};
       if (type) {
-        const typeMap = {
+        const typeMapFilter = {
           EARN: "Dapat Point",
           REDEEM: "Tukar Point",
           ADJUSTMENT: "Penyesuaian",
           EXPIRED: "Kadaluarsa",
         };
-        filters.Jenis = typeMap[type] || type;
+        filters.Jenis = typeMapFilter[type] || type;
       }
       if (search) filters.Pencarian = search;
       if (startDate)
@@ -269,7 +270,6 @@ class PointController {
           "id-ID"
         );
 
-      // Generate Excel
       const buffer = await ExcelExporter.exportToExcel(
         excelData,
         columns,
@@ -281,7 +281,6 @@ class PointController {
         }
       );
 
-      // Set response headers
       const filename = `Transaksi-Point-${
         new Date().toISOString().split("T")[0]
       }.xlsx`;
@@ -312,16 +311,25 @@ class PointController {
    */
   static async getSettings(req, res, next) {
     try {
-      // TODO: Get from Settings model or config
+      const pointEnabled = (await Setting.get("point_enabled")) || true;
+      const pointPerAmount = (await Setting.get("point_per_rupiah")) || 1000;
+      const minTransactionForPoints =
+        (await Setting.get("min_transaction_for_points")) || 50000;
+      const pointExpiryMonths =
+        (await Setting.get("point_expiry_months")) || 12;
+      const minPointsToRedeem =
+        (await Setting.get("min_points_to_redeem")) || 100;
+      const pointValue = (await Setting.get("point_value")) || 1000;
+
       const settings = {
-        pointEnabled: true,
-        pointSystemMode: "TRANSACTION", // or "PRODUCT"
-        pointPerAmount: 1000, // 1 point per 1000 rupiah
-        minTransactionForPoints: 50000,
-        pointExpiryMonths: 12,
+        pointEnabled: pointEnabled === true || pointEnabled === "true",
+        pointSystemMode: "TRANSACTION",
+        pointPerAmount: parseInt(pointPerAmount),
+        minTransactionForPoints: parseInt(minTransactionForPoints),
+        pointExpiryMonths: parseInt(pointExpiryMonths),
         redeemEnabled: true,
-        minPointsToRedeem: 100,
-        pointValue: 1000, // 1 point = 1000 rupiah
+        minPointsToRedeem: parseInt(minPointsToRedeem),
+        pointValue: parseInt(pointValue),
       };
 
       return ApiResponse.success(
@@ -343,45 +351,13 @@ class PointController {
     try {
       const { memberId } = req.params;
 
-      const member = await Member.findByPk(memberId, {
-        attributes: ["id", "uniqueId", "fullName", "totalPoints"],
-      });
+      const summary = await PointTransaction.getMemberSummary(memberId);
 
-      if (!member) {
-        return ApiResponse.notFound(res, "Member not found");
-      }
-
-      // Get point statistics
-      const earnedPoints = await PointTransaction.sum("points", {
-        where: { memberId, type: "EARN" },
-      });
-
-      const redeemedPoints = Math.abs(
-        (await PointTransaction.sum("points", {
-          where: { memberId, type: "REDEEM" },
-        })) || 0
+      return ApiResponse.success(
+        res,
+        summary,
+        "Member point summary retrieved successfully"
       );
-
-      const expiredPoints = Math.abs(
-        (await PointTransaction.sum("points", {
-          where: { memberId, type: "EXPIRED" },
-        })) || 0
-      );
-
-      return ApiResponse.success(res, {
-        member: {
-          id: member.id,
-          uniqueId: member.uniqueId,
-          fullName: member.fullName,
-          currentPoints: member.totalPoints || 0,
-        },
-        statistics: {
-          totalEarned: earnedPoints || 0,
-          totalRedeemed: redeemedPoints,
-          totalExpired: expiredPoints,
-          available: member.totalPoints || 0,
-        },
-      });
     } catch (error) {
       next(error);
     }
@@ -396,35 +372,18 @@ class PointController {
     try {
       const { memberId } = req.params;
       const { page = 1, limit = 20, type } = req.query;
-      const offset = (page - 1) * limit;
 
-      const whereClause = { memberId };
-      if (type) whereClause.type = type;
-
-      const { rows, count } = await PointTransaction.findAndCountAll({
-        where: whereClause,
-        limit: parseInt(limit),
-        offset,
-        order: [["createdAt", "DESC"]],
-        include: [
-          {
-            model: require("../models/Sale"),
-            as: "sale",
-            attributes: ["id", "invoiceNumber", "finalAmount"],
-            required: false,
-          },
-        ],
-      });
+      const result = await PointTransaction.getMemberHistory(
+        memberId,
+        parseInt(page),
+        parseInt(limit),
+        type
+      );
 
       return ApiResponse.paginated(
         res,
-        rows,
-        {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total: count,
-          totalPages: Math.ceil(count / limit),
-        },
+        result.transactions,
+        result.pagination,
         "Point history retrieved successfully"
       );
     } catch (error) {
@@ -439,17 +398,45 @@ class PointController {
    */
   static async previewCalculation(req, res, next) {
     try {
-      const { items, totalAmount } = req.body;
+      const { totalAmount } = req.body;
 
-      // Simple calculation: 1 point per 1000 rupiah
-      const pointsToEarn = Math.floor(totalAmount / 1000);
+      if (!totalAmount || totalAmount <= 0) {
+        return ApiResponse.validationError(
+          res,
+          { totalAmount: "Total amount must be greater than 0" },
+          "Invalid amount"
+        );
+      }
+
+      // Get settings
+      const pointPerAmount = (await Setting.get("point_per_rupiah")) || 1000;
+      const minTransactionForPoints =
+        (await Setting.get("min_transaction_for_points")) || 50000;
+
+      // Check if transaction qualifies for points
+      if (totalAmount < minTransactionForPoints) {
+        return ApiResponse.success(res, {
+          totalAmount,
+          pointsToEarn: 0,
+          calculation: `Minimum transaction for points: Rp ${minTransactionForPoints.toLocaleString(
+            "id-ID"
+          )}`,
+          qualified: false,
+        });
+      }
+
+      // Calculate points: 1 point per X rupiah
+      const pointsToEarn = Math.floor(totalAmount / pointPerAmount);
 
       return ApiResponse.success(res, {
         totalAmount,
         pointsToEarn,
         calculation: `Rp ${totalAmount.toLocaleString(
           "id-ID"
-        )} = ${pointsToEarn} points`,
+        )} = ${pointsToEarn} points (1 point per Rp ${pointPerAmount.toLocaleString(
+          "id-ID"
+        )})`,
+        qualified: true,
       });
     } catch (error) {
       next(error);
@@ -465,20 +452,39 @@ class PointController {
     try {
       const { memberId, pointsToRedeem, transactionAmount } = req.body;
 
+      // Validate inputs
+      if (!memberId || !pointsToRedeem || !transactionAmount) {
+        return ApiResponse.validationError(
+          res,
+          {
+            memberId: !memberId ? "Member ID is required" : undefined,
+            pointsToRedeem: !pointsToRedeem
+              ? "Points to redeem is required"
+              : undefined,
+            transactionAmount: !transactionAmount
+              ? "Transaction amount is required"
+              : undefined,
+          },
+          "Validation failed"
+        );
+      }
+
       const member = await Member.findByPk(memberId);
       if (!member) {
         return ApiResponse.notFound(res, "Member not found");
       }
 
       const currentPoints = member.totalPoints || 0;
-      const minPoints = 100; // Minimum points to redeem
-      const pointValue = 1000; // 1 point = 1000 rupiah
+      const minPoints = (await Setting.get("min_points_to_redeem")) || 100;
+      const pointValue = (await Setting.get("point_value")) || 1000;
       const maxRedeemPercentage = 50; // Max 50% of transaction
 
       const errors = [];
+
       if (pointsToRedeem < minPoints) {
         errors.push(`Minimum redemption is ${minPoints} points`);
       }
+
       if (pointsToRedeem > currentPoints) {
         errors.push(`Insufficient points. Available: ${currentPoints}`);
       }
@@ -504,6 +510,7 @@ class PointController {
           pointsToRedeem,
           redeemValue,
           maxRedeemValue,
+          maxRedeemPoints: Math.floor(maxRedeemValue / pointValue),
           remainingPoints: currentPoints - pointsToRedeem,
         },
       });
@@ -518,16 +525,87 @@ class PointController {
    * @access Private
    */
   static async redeemPoints(req, res, next) {
+    const t = await sequelize.transaction();
+
     try {
       const { memberId, points, description, notes } = req.body;
 
-      // TODO: Implement with transaction and validation
-      return ApiResponse.success(
-        res,
-        null,
-        "Point redemption - Implementation pending"
+      // Validate inputs
+      if (!memberId || !points || points <= 0) {
+        await t.rollback();
+        return ApiResponse.validationError(
+          res,
+          {
+            memberId: !memberId ? "Member ID is required" : undefined,
+            points:
+              !points || points <= 0
+                ? "Points must be greater than 0"
+                : undefined,
+          },
+          "Validation failed"
+        );
+      }
+
+      // Get member
+      const member = await Member.findByPk(memberId, { transaction: t });
+      if (!member) {
+        await t.rollback();
+        return ApiResponse.notFound(res, "Member not found");
+      }
+
+      // Check minimum points
+      const minPoints = (await Setting.get("min_points_to_redeem")) || 100;
+      if (points < minPoints) {
+        await t.rollback();
+        return ApiResponse.validationError(
+          res,
+          { points: `Minimum redemption is ${minPoints} points` },
+          "Points below minimum"
+        );
+      }
+
+      // Check if member has enough points
+      if (member.totalPoints < points) {
+        await t.rollback();
+        return ApiResponse.validationError(
+          res,
+          {
+            points: `Insufficient points. Available: ${member.totalPoints}, Requested: ${points}`,
+          },
+          "Insufficient points"
+        );
+      }
+
+      // Record redemption
+      const pointTrx = await PointTransaction.recordRedeem(
+        memberId,
+        points,
+        description || `Penukaran ${points} point`,
+        req.user.id,
+        t
       );
+
+      await t.commit();
+
+      // Reload with member data
+      await pointTrx.reload({
+        include: [
+          {
+            model: Member,
+            as: "member",
+            attributes: ["id", "uniqueId", "fullName", "totalPoints"],
+          },
+        ],
+      });
+
+      console.log(
+        `✅ Points redeemed: ${points} points for member ${member.uniqueId} by ${req.user.name}`
+      );
+
+      return ApiResponse.success(res, pointTrx, "Points redeemed successfully");
     } catch (error) {
+      await t.rollback();
+      console.error("❌ Error redeeming points:", error);
       next(error);
     }
   }
@@ -539,12 +617,92 @@ class PointController {
    */
   static async updateSettings(req, res, next) {
     try {
-      const settings = req.body;
+      const {
+        pointEnabled,
+        pointPerAmount,
+        minTransactionForPoints,
+        pointExpiryMonths,
+        minPointsToRedeem,
+        pointValue,
+      } = req.body;
 
-      // TODO: Update settings in database
+      // Update settings
+      if (pointEnabled !== undefined) {
+        await Setting.set(
+          "point_enabled",
+          pointEnabled,
+          "BOOLEAN",
+          "TRANSACTION",
+          "Enable/disable point system"
+        );
+      }
+
+      if (pointPerAmount) {
+        await Setting.set(
+          "point_per_rupiah",
+          pointPerAmount,
+          "NUMBER",
+          "TRANSACTION",
+          "Points per rupiah (1 point per X rupiah)"
+        );
+      }
+
+      if (minTransactionForPoints) {
+        await Setting.set(
+          "min_transaction_for_points",
+          minTransactionForPoints,
+          "NUMBER",
+          "TRANSACTION",
+          "Minimum transaction amount to earn points"
+        );
+      }
+
+      if (pointExpiryMonths) {
+        await Setting.set(
+          "point_expiry_months",
+          pointExpiryMonths,
+          "NUMBER",
+          "TRANSACTION",
+          "Point expiry duration in months"
+        );
+      }
+
+      if (minPointsToRedeem) {
+        await Setting.set(
+          "min_points_to_redeem",
+          minPointsToRedeem,
+          "NUMBER",
+          "TRANSACTION",
+          "Minimum points required for redemption"
+        );
+      }
+
+      if (pointValue) {
+        await Setting.set(
+          "point_value",
+          pointValue,
+          "NUMBER",
+          "TRANSACTION",
+          "Point value in rupiah (1 point = X rupiah)"
+        );
+      }
+
+      // Get updated settings
+      const updatedSettings = {
+        pointEnabled: (await Setting.get("point_enabled")) || true,
+        pointPerAmount: (await Setting.get("point_per_rupiah")) || 1000,
+        minTransactionForPoints:
+          (await Setting.get("min_transaction_for_points")) || 50000,
+        pointExpiryMonths: (await Setting.get("point_expiry_months")) || 12,
+        minPointsToRedeem: (await Setting.get("min_points_to_redeem")) || 100,
+        pointValue: (await Setting.get("point_value")) || 1000,
+      };
+
+      console.log(`✅ Point settings updated by ${req.user.name}`);
+
       return ApiResponse.success(
         res,
-        settings,
+        updatedSettings,
         "Point settings updated successfully"
       );
     } catch (error) {
@@ -558,16 +716,70 @@ class PointController {
    * @access Private (ADMIN only)
    */
   static async adjustPoints(req, res, next) {
+    const t = await sequelize.transaction();
+
     try {
       const { memberId, points, description, notes } = req.body;
 
-      // TODO: Implement with transaction
+      // Validate inputs
+      if (!memberId || !points || points === 0) {
+        await t.rollback();
+        return ApiResponse.validationError(
+          res,
+          {
+            memberId: !memberId ? "Member ID is required" : undefined,
+            points:
+              !points || points === 0 ? "Points cannot be zero" : undefined,
+          },
+          "Validation failed"
+        );
+      }
+
+      // Get member
+      const member = await Member.findByPk(memberId, { transaction: t });
+      if (!member) {
+        await t.rollback();
+        return ApiResponse.notFound(res, "Member not found");
+      }
+
+      // Record adjustment
+      const pointTrx = await PointTransaction.recordAdjustment(
+        memberId,
+        parseInt(points),
+        description ||
+          `Penyesuaian manual: ${points > 0 ? "+" : ""}${points} point`,
+        req.user.id,
+        notes,
+        t
+      );
+
+      await t.commit();
+
+      // Reload with member data
+      await pointTrx.reload({
+        include: [
+          {
+            model: Member,
+            as: "member",
+            attributes: ["id", "uniqueId", "fullName", "totalPoints"],
+          },
+        ],
+      });
+
+      console.log(
+        `✅ Point adjustment: ${
+          points > 0 ? "+" : ""
+        }${points} points for member ${member.uniqueId} by ${req.user.name}`
+      );
+
       return ApiResponse.success(
         res,
-        null,
-        "Point adjustment - Implementation pending"
+        pointTrx,
+        "Point adjustment recorded successfully"
       );
     } catch (error) {
+      await t.rollback();
+      console.error("❌ Error adjusting points:", error);
       next(error);
     }
   }
@@ -579,22 +791,24 @@ class PointController {
    */
   static async expirePoints(req, res, next) {
     try {
-      // TODO: Implement expiration logic
+      console.log(`🔄 Running point expiration process by ${req.user.name}...`);
+
+      const result = await PointTransaction.expirePoints();
+
+      console.log(
+        `✅ Point expiration completed: ${result.totalExpired} points expired`
+      );
+
       return ApiResponse.success(
         res,
-        { expired: 0 },
-        "Point expiration - Implementation pending"
+        result,
+        `Successfully expired ${result.totalExpired} point transactions`
       );
     } catch (error) {
+      console.error("❌ Error expiring points:", error);
       next(error);
     }
   }
-
-  // Add other PointController methods here...
-  // static async getMemberPoints(req, res, next) { ... }
-  // static async addPoints(req, res, next) { ... }
-  // static async redeemPoints(req, res, next) { ... }
-  // etc.
 }
 
 module.exports = PointController;

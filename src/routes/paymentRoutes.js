@@ -1,7 +1,7 @@
 // ============================================
 // src/routes/paymentRoutes.js
 // Routes untuk pembayaran hutang (member & supplier)
-// UPDATED: Added export endpoints
+// FIXED: Route order corrected for export endpoints
 // ============================================
 const express = require("express");
 const router = express.Router();
@@ -32,7 +32,6 @@ router.get(
  * @route   GET /api/payments/member-debts
  * @desc    Get all member debts with pagination
  * @access  Private (ADMIN, KASIR)
- * ✨ ENHANCED: Better search, filter by region, date range
  */
 router.get(
   "/member-debts",
@@ -42,7 +41,7 @@ router.get(
 );
 
 /**
- * ✨ NEW ROUTE
+ * ⚠️ CRITICAL: Export route MUST come BEFORE dynamic routes
  * @route   GET /api/payments/member-debts/export
  * @desc    Export member debts to Excel
  * @access  Private (ADMIN, KASIR)
@@ -98,7 +97,6 @@ router.post(
  * @route   GET /api/payments/supplier-debts
  * @desc    Get all supplier debts with pagination
  * @access  Private (ADMIN, KASIR)
- * ✨ ENHANCED: Better search, date range filter
  */
 router.get(
   "/supplier-debts",
@@ -108,7 +106,7 @@ router.get(
 );
 
 /**
- * ✨ NEW ROUTE
+ * ⚠️ CRITICAL: Export route MUST come BEFORE dynamic routes
  * @route   GET /api/payments/supplier-debts/export
  * @desc    Export supplier debts to Excel
  * @access  Private (ADMIN, KASIR)

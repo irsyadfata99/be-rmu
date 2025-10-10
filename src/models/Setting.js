@@ -1,6 +1,6 @@
 // ============================================
 // src/models/Setting.js
-// Model untuk konfigurasi aplikasi (key-value storage)
+// PRODUCTION READY - Application Configuration Storage
 // ============================================
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
@@ -117,8 +117,15 @@ Setting.get = async function (key, defaultValue = null) {
 /**
  * Set setting value
  */
-Setting.set = async function (key, value, type = "TEXT", group = "GENERAL", description = null) {
-  const stringValue = typeof value === "object" ? JSON.stringify(value) : String(value);
+Setting.set = async function (
+  key,
+  value,
+  type = "TEXT",
+  group = "GENERAL",
+  description = null
+) {
+  const stringValue =
+    typeof value === "object" ? JSON.stringify(value) : String(value);
 
   const [setting] = await this.findOrCreate({
     where: { key },
@@ -226,6 +233,41 @@ Setting.initializeDefaults = async function () {
       description: "Poin per rupiah (1 poin per 1000 rupiah)",
     },
     {
+      key: "point_enabled",
+      value: "true",
+      type: "BOOLEAN",
+      group: "TRANSACTION",
+      description: "Enable/disable sistem point",
+    },
+    {
+      key: "min_transaction_for_points",
+      value: "50000",
+      type: "NUMBER",
+      group: "TRANSACTION",
+      description: "Minimum transaksi untuk dapat point",
+    },
+    {
+      key: "point_expiry_months",
+      value: "12",
+      type: "NUMBER",
+      group: "TRANSACTION",
+      description: "Masa berlaku point (bulan)",
+    },
+    {
+      key: "min_points_to_redeem",
+      value: "100",
+      type: "NUMBER",
+      group: "TRANSACTION",
+      description: "Minimum point untuk ditukar",
+    },
+    {
+      key: "point_value",
+      value: "1000",
+      type: "NUMBER",
+      group: "TRANSACTION",
+      description: "Nilai point dalam rupiah (1 point = X rupiah)",
+    },
+    {
       key: "auto_print_after_sale",
       value: "true",
       type: "BOOLEAN",
@@ -277,13 +319,20 @@ Setting.initializeDefaults = async function () {
 
   for (const setting of defaults) {
     try {
-      const created = await this.set(setting.key, setting.value, setting.type, setting.group, setting.description);
+      const created = await this.set(
+        setting.key,
+        setting.value,
+        setting.type,
+        setting.group,
+        setting.description
+      );
       results.push(created);
     } catch (error) {
       console.error(`Error creating setting ${setting.key}:`, error.message);
     }
   }
 
+  console.log(`✅ Initialized ${results.length} default settings`);
   return results;
 };
 
@@ -307,6 +356,49 @@ Setting.getAllGrouped = async function () {
   });
 
   return grouped;
+};
+
+/**
+ * Get all settings by group
+ */
+Setting.getByGroup = async function (group) {
+  const settings = await this.findAll({
+    where: { group },
+    order: [["key", "ASC"]],
+  });
+
+  const result = {};
+  settings.forEach((setting) => {
+    result[setting.key] = setting.getParsedValue();
+  });
+
+  return result;
+};
+
+/**
+ * Bulk update settings
+ */
+Setting.bulkUpdate = async function (updates) {
+  const results = [];
+
+  for (const [key, value] of Object.entries(updates)) {
+    try {
+      const setting = await this.findOne({ where: { key } });
+
+      if (setting) {
+        const stringValue =
+          typeof value === "object" ? JSON.stringify(value) : String(value);
+        await setting.update({ value: stringValue });
+        results.push({ key, success: true });
+      } else {
+        results.push({ key, success: false, error: "Setting not found" });
+      }
+    } catch (error) {
+      results.push({ key, success: false, error: error.message });
+    }
+  }
+
+  return results;
 };
 
 module.exports = Setting;

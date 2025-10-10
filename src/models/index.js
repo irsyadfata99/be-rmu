@@ -1,5 +1,6 @@
 // ============================================
-// src/models/index.js (FIXED - Complete Associations)
+// src/models/index.js
+// PRODUCTION READY - Complete Model Associations
 // ============================================
 
 // Import core models
@@ -17,7 +18,7 @@ const SupplierDebt = require("./SupplierDebt");
 // Import stock models
 const { StockMovement, StockAdjustment } = require("./StockMovement");
 
-// Import transaction models - FIXED IMPORT!
+// Import transaction models
 const Purchase = require("./Purchase");
 const PurchaseItem = require("./PurchaseItem");
 const Sale = require("./Sale");
@@ -379,7 +380,7 @@ SalesReturnItem.belongsTo(Product, {
   as: "product",
 });
 
-// ===== POINT TRANSACTION ASSOCIATIONS =====
+// ========== POINT TRANSACTION ASSOCIATIONS ==========
 
 // PointTransaction <-> Member
 Member.hasMany(PointTransaction, {

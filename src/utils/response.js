@@ -26,7 +26,12 @@ class ApiResponse {
    * @param {number} statusCode - HTTP status code (default: 500)
    * @param {object} errors - Validation errors (optional)
    */
-  static error(res, message = "Internal Server Error", statusCode = 500, errors = null) {
+  static error(
+    res,
+    message = "Internal Server Error",
+    statusCode = 500,
+    errors = null
+  ) {
     const response = {
       success: false,
       message,
@@ -50,12 +55,9 @@ class ApiResponse {
     return res.status(200).json({
       success: true,
       message,
-      data,
-      pagination: {
-        page: pagination.page || 1,
-        limit: pagination.limit || 10,
-        total: pagination.total || 0,
-        totalPages: pagination.totalPages || 0,
+      data: {
+        data: data, // ⚠️ HARUS nested seperti ini
+        pagination: pagination,
       },
     });
   }
