@@ -1,5 +1,5 @@
 // ============================================
-// src/models/index.js
+// src/models/index.js (COMPLETE & VERIFIED)
 // PRODUCTION READY - Complete Model Associations
 // ============================================
 
@@ -428,11 +428,13 @@ module.exports = {
 
   // Products & Stock
   Product,
+  StockMovement,
+  StockAdjustment,
+
+  // Debt
   MemberDebt,
   DebtPayment,
   SupplierDebt,
-  StockMovement,
-  StockAdjustment,
 
   // Transactions
   Purchase,

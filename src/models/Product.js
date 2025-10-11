@@ -1,5 +1,5 @@
 // ============================================
-// src/models/Product.js (UPDATED - WITH DUAL PRICING)
+// src/models/Product.js (FIXED - Removed Duplicate Indexes)
 // Model untuk master data produk/barang
 // ============================================
 const { DataTypes } = require("sequelize");
@@ -221,14 +221,7 @@ const Product = sequelize.define(
     timestamps: true,
     underscored: true,
     indexes: [
-      {
-        unique: true,
-        fields: ["barcode"],
-      },
-      {
-        unique: true,
-        fields: ["sku"],
-      },
+      // ✅ REMOVED: barcode & sku indexes (sudah unique di definisi kolom)
       {
         fields: ["name"],
       },
