@@ -1,89 +1,43 @@
 // ============================================
 // src/utils/printFormatter.js
 // Utility untuk format template print (Dot Matrix & Thermal)
-// ✅ FIXED: Auto-print script yang lebih reliable
+// ✅ FIXED: Continuous form format (21cm width, auto height)
 // ============================================
 const { terbilang, formatCurrency } = require("./terbilang");
 const Setting = require("../models/Setting");
 
 /**
- * Generate Dot Matrix Invoice HTML (80 characters width)
- * Format untuk transaksi KREDIT
+ * Generate Dot Matrix Invoice HTML (Continuous Form - 21cm width)
+ * Format untuk transaksi KREDIT - Mirip form asli NCR
  */
 async function generateDotMatrixInvoice(saleData) {
-  const {
-    invoiceNumber,
-    saleDate,
-    member,
-    items,
-    totalAmount,
-    discountAmount,
-    finalAmount,
-    dpAmount,
-    remainingDebt,
-    dueDate,
-    notes,
-  } = saleData;
+  const { invoiceNumber, saleDate, member, items, totalAmount, discountAmount, finalAmount, dpAmount, remainingDebt, dueDate, notes } = saleData;
 
   // Get settings
   const companyName = await Setting.get("company_name", "KOPERASI YAMUGHNI");
-  const companyAddress = await Setting.get(
-    "company_address",
-    "Jalan Kaum No. 2 Samping Terminal Cicaheum"
-  );
-  const companyPhone = await Setting.get(
-    "company_phone",
-    "Telepon (022) 20503787, 085877877877"
-  );
-  const companyWebsite = await Setting.get(
-    "company_website",
-    "www.yamughni.info"
-  );
+  const companyAddress = await Setting.get("company_address", "Jalan Kaum No. 2 Samping Terminal Cicaheum");
+  const companyPhone = await Setting.get("company_phone", "Telepon (022) 20503787, 085877877877");
+  const companyWebsite = await Setting.get("company_website", "www.yamughni.info");
   const companyCity = await Setting.get("company_city", "Bandung");
   const bankName = await Setting.get("bank_name", "MANDIRI");
-  const bankAccount = await Setting.get(
-    "bank_account_number",
-    "131-00-1687726-0"
-  );
-  const bankAccountName = await Setting.get(
-    "bank_account_name",
-    "KOPERASI YAMUGHNI"
-  );
+  const bankAccount = await Setting.get("bank_account_number", "131-00-1687726-0");
+  const bankAccountName = await Setting.get("bank_account_name", "KOPERASI YAMUGHNI");
 
   // Format date
-  const months = [
-    "Januari",
-    "Februari",
-    "Maret",
-    "April",
-    "Mei",
-    "Juni",
-    "Juli",
-    "Agustus",
-    "September",
-    "Oktober",
-    "November",
-    "Desember",
-  ];
+  const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
   const date = new Date(saleDate);
-  const formattedDate = `${date.getDate()} ${
-    months[date.getMonth()]
-  } ${date.getFullYear()}`;
+  const formattedDate = `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
 
   // Format due date
   let formattedDueDate = "";
   if (dueDate) {
     const dueDateObj = new Date(dueDate);
-    formattedDueDate = `${dueDateObj.getDate()} ${
-      months[dueDateObj.getMonth()]
-    } ${dueDateObj.getFullYear()}`;
+    formattedDueDate = `${dueDateObj.getDate()} ${months[dueDateObj.getMonth()]} ${dueDateObj.getFullYear()}`;
   }
 
   // Member info
   const memberName = member ? member.fullName : "UMUM";
-  const memberArea = member
-    ? `${member.regionCode} (${member.regionName})`
-    : "-";
+  const memberArea = member ? `${member.regionCode} (${member.regionName})` : "-";
   const memberId = member ? member.uniqueId : "-";
 
   // Generate items table
@@ -103,65 +57,77 @@ async function generateDotMatrixInvoice(saleData) {
   // Terbilang
   const amountWords = terbilang(finalAmount);
 
-  // HTML Template
+  // HTML Template - Continuous Form Style
   const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <title>Faktur ${invoiceNumber}</title>
   <style>
+    /* ✅ CONTINUOUS FORM: 21cm width, auto height */
     @page {
-      size: 21cm 14.85cm;
+      size: 21cm auto;
       margin: 0;
     }
     
     body {
       font-family: 'Courier New', Courier, monospace;
       font-size: 10pt;
-      line-height: 1.2;
+      line-height: 1.3;
       margin: 0;
-      padding: 15mm;
-      white-space: pre;
+      padding: 10mm 8mm;
+      width: 21cm;
+      box-sizing: border-box;
     }
     
     .header {
       text-align: center;
       font-weight: bold;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
+      font-size: 11pt;
     }
     
     .line {
       border-bottom: 1px solid #000;
-      margin: 5px 0;
+      margin: 4px 0;
     }
     
-    .section {
-      margin: 10px 0;
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 2px 0;
     }
     
-    table {
-      width: 100%;
-      border-collapse: collapse;
+    .items-section {
+      margin: 8px 0;
     }
     
-    .text-right {
-      text-align: right;
+    .footer-section {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
     }
     
-    .text-center {
+    .signature {
       text-align: center;
+      margin-top: 40px;
     }
     
-    .bold {
-      font-weight: bold;
+    pre {
+      margin: 0;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 10pt;
+      white-space: pre;
     }
     
     @media print {
       body {
         padding: 0;
+        margin: 0;
       }
       
-      button {
+      button, .no-print {
         display: none !important;
       }
     }
@@ -176,52 +142,68 @@ Website: ${companyWebsite}
 </div>
 <div class="line"></div>
 
-Faktur No.: ${invoiceNumber}                    ${companyCity}, ${formattedDate}
+<div class="info-row">
+  <span>Faktur No.: ${invoiceNumber}</span>
+  <span>${companyCity}, ${formattedDate}</span>
+</div>
 
-Kepada Yth.                     ID MEMBER : ${memberId}
-                                NAMA      : ${memberName}
-                                AREA      : ${memberArea}
-                                ${
-                                  dueDate
-                                    ? `JATUH TEMPO: ${formattedDueDate}`
-                                    : ""
-                                }
+<br>
+<div style="display: grid; grid-template-columns: 1fr 2fr;">
+  <div>Kepada Yth.</div>
+  <div>
+    ID MEMBER : ${memberId}<br>
+    NAMA      : ${memberName}<br>
+    AREA      : ${memberArea}
+    ${dueDate ? `<br>JATUH TEMPO: ${formattedDueDate}` : ""}
+  </div>
+</div>
 
+<br>
 <div class="line"></div>
-No  Qty  Satuan  Nama Barang          Harga     Disc   Jumlah
+<pre>No  Qty  Satuan  Nama Barang          Harga     Disc   Jumlah</pre>
 <div class="line"></div>
-${itemsHtml}<div class="line"></div>
+<pre>${itemsHtml}</pre>
+<div class="line"></div>
 
-TERBILANG: ${amountWords}
+<br>
+<div><strong>TERBILANG:</strong> ${amountWords}</div>
 
-                                    TOTAL FAKTUR  : ${formatCurrency(
-                                      totalAmount
-                                    )}
-Setiap pembayaran harap             JUMLAH DISC   : ${formatCurrency(
-    discountAmount
-  )}
-ditransfer langsung ke rekening:    JUMLAH BAYAR  : ${formatCurrency(
-    finalAmount
-  )}
-${bankName}: ${bankAccount}         ${
-    dpAmount > 0 ? `DP            : ${formatCurrency(dpAmount)}` : ""
-  }
-${bankAccountName}                  SISA KREDIT   : ${formatCurrency(
-    remainingDebt
-  )}
+<br>
+<div class="footer-section">
+  <div>
+    <div>Setiap pembayaran harap</div>
+    <div>ditransfer langsung ke rekening:</div>
+    <div><strong>${bankName}: ${bankAccount}</strong></div>
+    <div><strong>${bankAccountName}</strong></div>
+  </div>
+  <div style="text-align: right;">
+    <div>TOTAL FAKTUR  : ${formatCurrency(totalAmount)}</div>
+    <div>JUMLAH DISC   : ${formatCurrency(discountAmount)}</div>
+    <div>JUMLAH BAYAR  : ${formatCurrency(finalAmount)}</div>
+    ${dpAmount > 0 ? `<div>DP            : ${formatCurrency(dpAmount)}</div>` : ""}
+    <div><strong>SISA KREDIT   : ${formatCurrency(remainingDebt)}</strong></div>
+  </div>
+</div>
 
-${notes ? `Catatan: ${notes}` : ""}
+${notes ? `<br><div>Catatan: ${notes}</div>` : ""}
 
-Yang menerima,                              Hormat Kami,
+<br><br>
+<div class="footer-section">
+  <div class="signature">
+    <div>Yang menerima,</div>
+    <br><br><br>
+    <div>(...............)</div>
+  </div>
+  <div class="signature">
+    <div>Hormat Kami,</div>
+    <br><br><br>
+    <div>(...............)</div>
+  </div>
+</div>
 
-
-
-
-(................)                          (................)
 <div class="line"></div>
 
 <script type="text/javascript">
-// ✅ FIX: Multiple auto-print triggers untuk reliability
 (function() {
   var printed = false;
   
@@ -232,22 +214,18 @@ Yang menerima,                              Hormat Kami,
     }
   }
   
-  // Method 1: DOMContentLoaded
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
       setTimeout(doPrint, 300);
     });
   } else {
-    // Method 2: Immediate if DOM already loaded
     setTimeout(doPrint, 300);
   }
   
-  // Method 3: window.onload as fallback
   window.onload = function() {
     setTimeout(doPrint, 500);
   };
   
-  // Auto close after print
   window.onafterprint = function() {
     setTimeout(function() {
       window.close();
@@ -262,42 +240,21 @@ Yang menerima,                              Hormat Kami,
 }
 
 /**
- * Generate Thermal Receipt HTML (32 characters width)
+ * Generate Thermal Receipt HTML (58mm width)
  * Format untuk transaksi TUNAI
  */
 async function generateThermalReceipt(saleData) {
-  const {
-    invoiceNumber,
-    saleDate,
-    member,
-    user,
-    items,
-    totalAmount,
-    discountAmount,
-    finalAmount,
-    paymentReceived,
-    changeAmount,
-  } = saleData;
+  const { invoiceNumber, saleDate, member, user, items, totalAmount, discountAmount, finalAmount, paymentReceived, changeAmount } = saleData;
 
   // Get settings
   const companyName = await Setting.get("company_name", "KOPERASI YAMUGHNI");
-  const companyAddress = await Setting.get(
-    "company_address",
-    "Jl. Kaum No. 4 Cicaheum"
-  );
-  const companyPhone = await Setting.get(
-    "company_phone",
-    "Telp: (022) 20503787"
-  );
+  const companyAddress = await Setting.get("company_address", "Jl. Kaum No. 4 Cicaheum");
+  const companyPhone = await Setting.get("company_phone", "Telp: (022) 20503787");
 
   // Format date & time
   const date = new Date(saleDate);
-  const formattedDate = `${String(date.getDate()).padStart(2, "0")}/${String(
-    date.getMonth() + 1
-  ).padStart(2, "0")}/${date.getFullYear()}`;
-  const formattedTime = `${String(date.getHours()).padStart(2, "0")}:${String(
-    date.getMinutes()
-  ).padStart(2, "0")}`;
+  const formattedDate = `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
+  const formattedTime = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 
   // Member info
   const memberId = member ? member.uniqueId : "-";
@@ -316,7 +273,6 @@ async function generateThermalReceipt(saleData) {
   ${qty} x ${price}${subtotal}\n\n`;
   });
 
-  // HTML Template
   const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -348,16 +304,8 @@ async function generateThermalReceipt(saleData) {
       margin: 5px 0;
     }
     
-    .text-right {
-      text-align: right;
-    }
-    
     .text-center {
       text-align: center;
-    }
-    
-    .bold {
-      font-weight: bold;
     }
     
     pre {
@@ -367,20 +315,13 @@ async function generateThermalReceipt(saleData) {
     }
     
     @media print {
-      body {
-        padding: 0;
-      }
-      
-      button {
-        display: none !important;
-      }
+      body { padding: 0; }
+      button { display: none !important; }
     }
   </style>
 </head>
 <body>
-<div class="header">
-${companyName}
-</div>
+<div class="header">${companyName}</div>
 <div class="text-center">
 ${companyAddress}
 ${companyPhone}
@@ -394,21 +335,12 @@ ${member ? `Member: ${memberId}` : ""}
 ${member ? `Nama: ${memberName}` : ""}
 </pre>
 <div class="line"></div>
-<pre>
-${itemsHtml}</pre>
+<pre>${itemsHtml}</pre>
 <div class="line"></div>
 <pre>
 TOTAL             ${formatCurrency(totalAmount).padStart(16)}
-${
-  discountAmount > 0
-    ? `DISCOUNT          ${formatCurrency(discountAmount).padStart(16)}`
-    : ""
-}
-${
-  discountAmount > 0
-    ? `BAYAR             ${formatCurrency(finalAmount).padStart(16)}`
-    : ""
-}
+${discountAmount > 0 ? `DISCOUNT          ${formatCurrency(discountAmount).padStart(16)}` : ""}
+${discountAmount > 0 ? `BAYAR             ${formatCurrency(finalAmount).padStart(16)}` : ""}
 BAYAR             ${formatCurrency(paymentReceived).padStart(16)}
 KEMBALI           ${formatCurrency(changeAmount).padStart(16)}
 </pre>
@@ -417,36 +349,26 @@ KEMBALI           ${formatCurrency(changeAmount).padStart(16)}
 <strong>Terima Kasih</strong><br>
 Belanja Lagi Ya!
 </div>
-<div class="line"></div>
 
 <script type="text/javascript">
-// ✅ FIX: Multiple auto-print triggers untuk reliability
 (function() {
   var printed = false;
-  
   function doPrint() {
     if (!printed) {
       printed = true;
       window.print();
     }
   }
-  
-  // Method 1: DOMContentLoaded
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
       setTimeout(doPrint, 300);
     });
   } else {
-    // Method 2: Immediate if DOM already loaded
     setTimeout(doPrint, 300);
   }
-  
-  // Method 3: window.onload as fallback
   window.onload = function() {
     setTimeout(doPrint, 500);
   };
-  
-  // Auto close after print
   window.onafterprint = function() {
     setTimeout(function() {
       window.close();

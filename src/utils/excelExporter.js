@@ -10,12 +10,15 @@ class ExcelExporter {
    * @param {Array} data - Array of objects to export
    * @param {Array} columns - Column definitions [{ header, key, width }]
    * @param {string} sheetName - Name of the worksheet
-   * @param {object} options - Additional options (title, filters, etc)
+   * @param {string|object} titleOrOptions - Title string or options object
    * @returns {Promise<Buffer>} Excel file buffer
    */
-  static async exportToExcel(data, columns, sheetName = "Data", options = {}) {
+  static async exportToExcel(data, columns, sheetName = "Data", titleOrOptions = {}) {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet(sheetName);
+
+    // ✅ Handle both old (title as 4th param) and new (options object) formats
+    const options = typeof titleOrOptions === "string" ? { title: titleOrOptions } : titleOrOptions;
 
     // ============================================
     // HEADER SECTION (if title provided)
@@ -33,9 +36,7 @@ class ExcelExporter {
 
     // Add export info
     if (options.title) {
-      worksheet.getCell(`A2`).value = `Exported: ${new Date().toLocaleString(
-        "id-ID"
-      )}`;
+      worksheet.getCell(`A2`).value = `Exported: ${new Date().toLocaleString("id-ID")}`;
       worksheet.getCell(`A2`).font = { size: 10, italic: true };
     }
 
@@ -205,6 +206,16 @@ class ExcelExporter {
       CANCELLED: "🚫 Dibatalkan",
     };
     return statusMap[status] || status;
+  }
+
+  /**
+   * ✅ Generate filename with timestamp
+   * @param {string} baseName - Base filename (e.g., "Laporan_Return")
+   * @returns {string} Filename with timestamp (e.g., "Laporan_Return_2025-01-11.xlsx")
+   */
+  static generateFilename(baseName) {
+    const timestamp = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    return `${baseName}_${timestamp}.xlsx`;
   }
 }
 

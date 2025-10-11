@@ -8,19 +8,17 @@ const routes = require("./routes");
 const errorHandler = require("./middlewares/errorHandler");
 const app = express();
 const PORT = process.env.PORT || 8000;
+
 // ============================================
-// ✅ FIX 1: CORS CONFIGURATION (Multi-Origin)
+// ✅ CORS CONFIGURATION (Multi-Origin)
 // ============================================
-const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
-  : ["http://localhost:3000", "http://localhost:5173"];
+const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim()) : ["http://localhost:3000", "http://localhost:5173"];
+
 const corsOptions = {
   origin: function (origin, callback) {
-    // ✅ FIXED: Prevent wildcard in production
     if (process.env.NODE_ENV === "production" && allowedOrigins.includes("*")) {
       return callback(new Error("Wildcard CORS not allowed in production"));
     }
-    // Allow requests with no origin (mobile apps, Postman)
     if (!origin) return callback(null, true);
 
     if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes("*")) {
@@ -32,89 +30,232 @@ const corsOptions = {
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-  exposedHeaders: ["Content-Range", "X-Content-Range"],
-  maxAge: 86400, // 24 hours
+  exposedHeaders: ["Content-Range", "X-Content-Range", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
+  maxAge: 86400,
 };
+
 // ============================================
-// ✅ FIX 2: RATE LIMITING MIDDLEWARE
+// ✅ PRODUCTION-READY RATE LIMITING
 // ============================================
 const rateLimit = require("express-rate-limit");
-// Global rate limiter (100 requests per 15 minutes)
+
+// Get rate limit config from env or use defaults
+const isDevelopment = process.env.NODE_ENV !== "production";
+const GLOBAL_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000; // 15 minutes
+const GLOBAL_MAX_REQUESTS = parseInt(
+  isDevelopment
+    ? process.env.RATE_LIMIT_MAX_REQUESTS_DEV || 1000 // 1000 for dev
+    : process.env.RATE_LIMIT_MAX_REQUESTS || 100 // 100 for prod
+);
+
+// Whitelist for development (localhost IPs)
+const DEV_WHITELIST = ["::1", "127.0.0.1", "::ffff:127.0.0.1"];
+
+// Skip rate limiting function
+const skipRateLimitCheck = (req) => {
+  // Always skip health check
+  if (req.path === "/api/health") return true;
+
+  // Skip for whitelisted IPs in development
+  if (isDevelopment && DEV_WHITELIST.includes(req.ip)) {
+    return true;
+  }
+
+  return false;
+};
+
+// Global rate limiter - applies to all API routes
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  windowMs: GLOBAL_WINDOW_MS,
+  max: GLOBAL_MAX_REQUESTS,
   message: {
     success: false,
-    message: "Too many requests from this IP, please try again later.",
+    message: "Terlalu banyak request dari IP ini, silakan coba lagi nanti.",
+    retryAfter: Math.ceil(GLOBAL_WINDOW_MS / 1000), // seconds
   },
   standardHeaders: true, // Return rate limit info in RateLimit-* headers
-  legacyHeaders: false, // Disable X-RateLimit-* headers
-  // Skip rate limiting for certain paths
-  skip: (req) => {
-    // Don't rate limit health check
-    return req.path === "/api/health";
+  legacyHeaders: false,
+  skip: skipRateLimitCheck,
+  // Custom handler to add retry info
+  handler: (req, res) => {
+    const retryAfter = Math.ceil(req.rateLimit.resetTime.getTime() - Date.now()) / 1000;
+    res.status(429).json({
+      success: false,
+      message: "Terlalu banyak request. Silakan tunggu beberapa saat.",
+      retryAfter: Math.ceil(retryAfter),
+      limit: GLOBAL_MAX_REQUESTS,
+      windowMs: GLOBAL_WINDOW_MS,
+    });
   },
 });
-// Stricter rate limiter for auth endpoints (5 requests per 15 minutes)
+
+// Stricter rate limiter for auth endpoints
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: isDevelopment ? 50 : 5, // More lenient in dev
   message: {
     success: false,
-    message: "Too many authentication attempts, please try again later.",
+    message: "Terlalu banyak percobaan login. Silakan coba lagi nanti.",
   },
-  skipSuccessfulRequests: true, // Don't count successful requests
+  skipSuccessfulRequests: true,
+  skip: skipRateLimitCheck,
 });
+
+// Moderate rate limiter for write operations (POST, PUT, DELETE)
+const writeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isDevelopment ? 500 : 200, // 200 writes per 15 min in production
+  message: {
+    success: false,
+    message: "Terlalu banyak operasi perubahan data. Silakan tunggu sebentar.",
+  },
+  skip: skipRateLimitCheck,
+});
+
+// Lenient rate limiter for read operations (GET)
+const readLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: isDevelopment ? 2000 : 500, // 500 reads per 15 min in production
+  message: {
+    success: false,
+    message: "Terlalu banyak request data. Silakan tunggu sebentar.",
+  },
+  skip: skipRateLimitCheck,
+});
+
 // ============================================
-// ✅ FIX 3: REQUEST TIMEOUT MIDDLEWARE
+// ✅ REQUEST TIMEOUT MIDDLEWARE
 // ============================================
 const timeout = require("connect-timeout");
-// Set timeout to 30 seconds for all requests
 const REQUEST_TIMEOUT = 30000; // 30 seconds
+
 function haltOnTimedout(req, res, next) {
   if (!req.timedout) next();
 }
+
 // ============================================
 // MIDDLEWARES
 // ============================================
 app.use(helmet());
 app.use(cors(corsOptions));
 app.use(morgan("dev"));
-// ✅ FIX 3: Apply timeout middleware
 app.use(timeout(REQUEST_TIMEOUT));
-// ✅ FIX 2: Apply global rate limiting
+
+// Apply global rate limiting
 app.use(globalLimiter);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-// Check timeout after each middleware
 app.use(haltOnTimedout);
+
 // Request logging middleware
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.originalUrl}`);
   next();
 });
+
 // ============================================
-// ROUTES
+// ROUTES WITH GRANULAR RATE LIMITING
 // ============================================
-// ✅ FIX 2: Apply stricter rate limiting to auth routes
+
+// Auth routes - strictest limits
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
+
+// Write operations - moderate limits
+app.use("/api/categories", (req, res, next) => {
+  if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) {
+    return writeLimiter(req, res, next);
+  }
+  return readLimiter(req, res, next);
+});
+
+app.use("/api/products", (req, res, next) => {
+  if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) {
+    return writeLimiter(req, res, next);
+  }
+  return readLimiter(req, res, next);
+});
+
+app.use("/api/suppliers", (req, res, next) => {
+  if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) {
+    return writeLimiter(req, res, next);
+  }
+  return readLimiter(req, res, next);
+});
+
+app.use("/api/members", (req, res, next) => {
+  if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) {
+    return writeLimiter(req, res, next);
+  }
+  return readLimiter(req, res, next);
+});
+
+app.use("/api/sales", (req, res, next) => {
+  if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) {
+    return writeLimiter(req, res, next);
+  }
+  return readLimiter(req, res, next);
+});
+
+app.use("/api/purchases", (req, res, next) => {
+  if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) {
+    return writeLimiter(req, res, next);
+  }
+  return readLimiter(req, res, next);
+});
+
+app.use("/api/payments", (req, res, next) => {
+  if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) {
+    return writeLimiter(req, res, next);
+  }
+  return readLimiter(req, res, next);
+});
+
+app.use("/api/stock", (req, res, next) => {
+  if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) {
+    return writeLimiter(req, res, next);
+  }
+  return readLimiter(req, res, next);
+});
+
+app.use("/api/returns", (req, res, next) => {
+  if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) {
+    return writeLimiter(req, res, next);
+  }
+  return readLimiter(req, res, next);
+});
+
+app.use("/api/points", (req, res, next) => {
+  if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) {
+    return writeLimiter(req, res, next);
+  }
+  return readLimiter(req, res, next);
+});
+
+app.use("/api/reports", readLimiter); // Reports are mostly read-only
+
+// Mount all routes
 app.use("/api", routes);
+
 // Root endpoint
 app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
     message: "🚀 Koperasi POS API is running",
     version: "1.0.0",
+    environment: process.env.NODE_ENV || "development",
     endpoints: {
       health: "/api/health",
       docs: "/api",
     },
   });
 });
+
 // ============================================
 // ERROR HANDLERS
 // ============================================
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
@@ -123,7 +264,8 @@ app.use((req, res) => {
     path: req.originalUrl,
   });
 });
-// ✅ FIX 3: Timeout error handler
+
+// Timeout error handler
 app.use((err, req, res, next) => {
   if (req.timedout) {
     return res.status(503).json({
@@ -134,8 +276,10 @@ app.use((err, req, res, next) => {
   }
   next(err);
 });
+
 // Global error handler (must be last)
 app.use(errorHandler);
+
 // ============================================
 // START SERVER
 // ============================================
@@ -144,12 +288,11 @@ const startServer = async () => {
     console.log("=".repeat(70));
     console.log("🚀 STARTING KOPERASI POS BACKEND");
     console.log("=".repeat(70));
-    // Test database connection
+
     await testConnection();
 
-    // ✅ FIX: Set alter to FALSE in production
     const syncOptions = {
-      alter: process.env.NODE_ENV !== "production", // Only alter in dev
+      alter: process.env.NODE_ENV !== "production",
     };
 
     await sequelize.sync(syncOptions);
@@ -161,7 +304,6 @@ const startServer = async () => {
       console.log("⚠️  ALTER mode ON - Database schema updated");
     }
 
-    // Start listening
     app.listen(PORT, () => {
       console.log("\n" + "=".repeat(70));
       console.log("✅ SERVER READY!");
@@ -169,9 +311,16 @@ const startServer = async () => {
       console.log(`🌐 Server URL: http://localhost:${PORT}`);
       console.log(`📡 API Base: http://localhost:${PORT}/api`);
       console.log(`🏥 Health Check: http://localhost:${PORT}/api/health`);
-      console.log(`🔐 CORS Origins: ${allowedOrigins.join(", ")}`);
+      console.log(`🔒 CORS Origins: ${allowedOrigins.join(", ")}`);
       console.log(`⏱️  Request Timeout: ${REQUEST_TIMEOUT / 1000}s`);
-      console.log(`🛡️  Rate Limit: 100 req/15min (Global), 5 req/15min (Auth)`);
+      console.log(`🛡️  Rate Limits (${isDevelopment ? "DEVELOPMENT" : "PRODUCTION"}):`);
+      console.log(`    - Global: ${GLOBAL_MAX_REQUESTS} req/${GLOBAL_WINDOW_MS / 60000} min`);
+      console.log(`    - Auth: ${isDevelopment ? 50 : 5} req/15 min`);
+      console.log(`    - Write: ${isDevelopment ? 500 : 200} req/15 min`);
+      console.log(`    - Read: ${isDevelopment ? 2000 : 500} req/15 min`);
+      if (isDevelopment) {
+        console.log(`    - Localhost (${DEV_WHITELIST.join(", ")}): UNLIMITED ✨`);
+      }
       console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
       console.log("=".repeat(70));
       console.log("\n💡 Ready to accept requests!\n");
@@ -185,15 +334,16 @@ const startServer = async () => {
     process.exit(1);
   }
 };
-// Handle unhandled promise rejections
+
 process.on("unhandledRejection", (err) => {
   console.error("❌ UNHANDLED PROMISE REJECTION:", err);
   console.error("🔄 Shutting down server...");
   process.exit(1);
 });
-// Handle SIGTERM
+
 process.on("SIGTERM", () => {
   console.log("👋 SIGTERM received. Shutting down gracefully...");
   process.exit(0);
 });
+
 startServer();
