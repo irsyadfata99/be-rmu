@@ -79,7 +79,7 @@ const Product = sequelize.define(
       defaultValue: "Cash",
       validate: {
         isIn: {
-          args: [["Cash", "Hutang"]],
+          args: [["TUNAI", "KREDIT", "KONSINYASI"]],
           msg: "Jenis pembelian tidak valid",
         },
       },
@@ -283,9 +283,7 @@ Product.prototype.reduceStock = async function (quantity, transaction = null) {
   await this.reload({ transaction });
 
   if (this.stock < quantity) {
-    throw new Error(
-      `Stok tidak cukup untuk ${this.name}. Tersedia: ${this.stock}, Diminta: ${quantity}`
-    );
+    throw new Error(`Stok tidak cukup untuk ${this.name}. Tersedia: ${this.stock}, Diminta: ${quantity}`);
   }
 
   const [affectedCount] = await Product.decrement("stock", {
@@ -298,9 +296,7 @@ Product.prototype.reduceStock = async function (quantity, transaction = null) {
   });
 
   if (affectedCount === 0) {
-    throw new Error(
-      `Gagal mengurangi stok ${this.name}. Kemungkinan stok sudah habis atau tidak mencukupi.`
-    );
+    throw new Error(`Gagal mengurangi stok ${this.name}. Kemungkinan stok sudah habis atau tidak mencukupi.`);
   }
 
   await this.reload({ transaction });
@@ -317,14 +313,10 @@ Product.prototype.toJSON = function () {
   const values = { ...this.get() };
 
   // Format decimal to number
-  if (values.purchasePrice)
-    values.purchasePrice = parseFloat(values.purchasePrice);
-  if (values.sellingPrice)
-    values.sellingPrice = parseFloat(values.sellingPrice);
-  if (values.sellingPriceGeneral)
-    values.sellingPriceGeneral = parseFloat(values.sellingPriceGeneral);
-  if (values.sellingPriceMember)
-    values.sellingPriceMember = parseFloat(values.sellingPriceMember);
+  if (values.purchasePrice) values.purchasePrice = parseFloat(values.purchasePrice);
+  if (values.sellingPrice) values.sellingPrice = parseFloat(values.sellingPrice);
+  if (values.sellingPriceGeneral) values.sellingPriceGeneral = parseFloat(values.sellingPriceGeneral);
+  if (values.sellingPriceMember) values.sellingPriceMember = parseFloat(values.sellingPriceMember);
   if (values.points) values.points = parseFloat(values.points);
 
   // Add computed fields
@@ -383,13 +375,7 @@ Product.getLowStock = async function () {
   return await this.findAll({
     where: {
       isActive: true,
-      [Op.or]: [
-        sequelize.where(
-          sequelize.col("stock"),
-          "<=",
-          sequelize.col("min_stock")
-        ),
-      ],
+      [Op.or]: [sequelize.where(sequelize.col("stock"), "<=", sequelize.col("min_stock"))],
     },
     order: [["stock", "ASC"]],
   });
