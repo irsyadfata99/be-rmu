@@ -1,6 +1,6 @@
 // ============================================
 // src/routes/productRoutes.js
-// Routes untuk product management
+// ✅ REMOVED toggleActive endpoint (no soft delete)
 // ============================================
 const express = require("express");
 const router = express.Router();
@@ -88,17 +88,14 @@ router.put("/:id", authenticate, authorize(["ADMIN"]), ProductController.update)
  */
 router.patch("/:id/stock", authenticate, authorize(["ADMIN"]), ProductController.updateStock);
 
-/**
- * @route   PATCH /api/products/:id/toggle
- * @desc    Toggle product active status
- * @access  Private (ADMIN)
- */
-router.patch("/:id/toggle", authenticate, authorize(["ADMIN"]), ProductController.toggleActive);
+// ✅ REMOVED: /api/products/:id/toggle endpoint
+// No soft delete for products
 
 /**
  * @route   DELETE /api/products/:id
- * @desc    Delete product (soft delete)
+ * @desc    Delete product PERMANENTLY (hard delete with safety check)
  * @access  Private (ADMIN)
+ * @warning This is PERMANENT deletion. Product will be removed from database.
  */
 router.delete("/:id", authenticate, authorize(["ADMIN"]), ProductController.delete);
 

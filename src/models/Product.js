@@ -1,6 +1,7 @@
 // ============================================
-// src/models/Product.js (FIXED - Removed Duplicate Indexes)
-// Model untuk master data produk/barang
+// src/models/Product.js - HARD DELETE VERSION
+// ✅ Removed isActive filter from all queries
+// ✅ Products are always active (no soft delete)
 // ============================================
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
@@ -59,7 +60,6 @@ const Product = sequelize.define(
       },
       onDelete: "SET NULL",
       onUpdate: "CASCADE",
-      comment: "Supplier utama (bisa null untuk produk dari multiple supplier)",
     },
     productType: {
       type: DataTypes.STRING(20),
@@ -71,35 +71,30 @@ const Product = sequelize.define(
           msg: "Jenis produk tidak valid",
         },
       },
-      comment: "Jenis produk: Tunai, Beli Putus, atau Konsinyasi",
     },
     purchaseType: {
       type: DataTypes.STRING(20),
       allowNull: false,
-      defaultValue: "Cash",
+      defaultValue: "TUNAI",
       validate: {
         isIn: {
           args: [["TUNAI", "KREDIT", "KONSINYASI"]],
           msg: "Jenis pembelian tidak valid",
         },
       },
-      comment: "Jenis pembelian: Cash atau Hutang",
     },
     invoiceNo: {
       type: DataTypes.STRING(50),
       allowNull: true,
-      comment: "Nomor invoice pembelian",
     },
     expiryDate: {
       type: DataTypes.DATEONLY,
       allowNull: true,
-      comment: "Tanggal kadaluarsa produk",
     },
     unit: {
       type: DataTypes.STRING(20),
       allowNull: false,
       defaultValue: "PCS",
-      comment: "Satuan kemasan (PCS, PAK, BOX, KG, LITER, dll)",
     },
     purchasePrice: {
       type: DataTypes.DECIMAL(15, 2),
@@ -111,9 +106,7 @@ const Product = sequelize.define(
           msg: "Harga beli tidak boleh negatif",
         },
       },
-      comment: "Harga beli terakhir",
     },
-    // ✅ NEW: Harga jual untuk umum
     sellingPriceGeneral: {
       type: DataTypes.DECIMAL(15, 2),
       allowNull: false,
@@ -124,9 +117,7 @@ const Product = sequelize.define(
           msg: "Harga jual umum tidak boleh negatif",
         },
       },
-      comment: "Harga jual untuk pelanggan umum",
     },
-    // ✅ NEW: Harga jual untuk anggota
     sellingPriceMember: {
       type: DataTypes.DECIMAL(15, 2),
       allowNull: false,
@@ -137,9 +128,7 @@ const Product = sequelize.define(
           msg: "Harga jual anggota tidak boleh negatif",
         },
       },
-      comment: "Harga jual untuk anggota koperasi",
     },
-    // ✅ KEEP: Untuk backward compatibility
     sellingPrice: {
       type: DataTypes.DECIMAL(15, 2),
       allowNull: false,
@@ -150,7 +139,6 @@ const Product = sequelize.define(
           msg: "Harga jual tidak boleh negatif",
         },
       },
-      comment: "Harga jual default (alias untuk sellingPriceGeneral)",
     },
     stock: {
       type: DataTypes.INTEGER,
@@ -162,7 +150,6 @@ const Product = sequelize.define(
           msg: "Stok tidak boleh negatif",
         },
       },
-      comment: "Jumlah stok saat ini",
     },
     minStock: {
       type: DataTypes.INTEGER,
@@ -174,7 +161,6 @@ const Product = sequelize.define(
           msg: "Minimal stok tidak boleh negatif",
         },
       },
-      comment: "Batas minimum stok untuk alert",
     },
     maxStock: {
       type: DataTypes.INTEGER,
@@ -186,9 +172,7 @@ const Product = sequelize.define(
           msg: "Maksimal stok tidak boleh negatif",
         },
       },
-      comment: "Batas maksimum stok",
     },
-    // ✅ RENAMED: pointsPerUnit -> points
     points: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
@@ -199,7 +183,6 @@ const Product = sequelize.define(
           msg: "Points tidak boleh negatif",
         },
       },
-      comment: "Point yang didapat per unit produk",
     },
     description: {
       type: DataTypes.TEXT,
@@ -208,12 +191,14 @@ const Product = sequelize.define(
     image: {
       type: DataTypes.STRING(255),
       allowNull: true,
-      comment: "URL/path gambar produk",
     },
+    // ✅ KEEP isActive column for backward compatibility
+    // But we don't use it for filtering anymore
     isActive: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: true,
+      comment: "Kept for backward compatibility, always true",
     },
   },
   {
@@ -221,7 +206,6 @@ const Product = sequelize.define(
     timestamps: true,
     underscored: true,
     indexes: [
-      // ✅ REMOVED: barcode & sku indexes (sudah unique di definisi kolom)
       {
         fields: ["name"],
       },
@@ -232,22 +216,18 @@ const Product = sequelize.define(
         fields: ["supplier_id"],
       },
       {
-        fields: ["is_active"],
-      },
-      {
         fields: ["stock"],
       },
     ],
-    // ✅ ADD: Hook untuk sinkronisasi harga
     hooks: {
       beforeCreate: (product) => {
-        // Jika sellingPrice tidak diset, gunakan sellingPriceGeneral
         if (!product.sellingPrice && product.sellingPriceGeneral) {
           product.sellingPrice = product.sellingPriceGeneral;
         }
+        // ✅ Always set isActive to true
+        product.isActive = true;
       },
       beforeUpdate: (product) => {
-        // Jika sellingPriceGeneral berubah, update juga sellingPrice
         if (product.changed("sellingPriceGeneral")) {
           product.sellingPrice = product.sellingPriceGeneral;
         }
@@ -312,14 +292,12 @@ Product.prototype.getProfitMargin = function () {
 Product.prototype.toJSON = function () {
   const values = { ...this.get() };
 
-  // Format decimal to number
   if (values.purchasePrice) values.purchasePrice = parseFloat(values.purchasePrice);
   if (values.sellingPrice) values.sellingPrice = parseFloat(values.sellingPrice);
   if (values.sellingPriceGeneral) values.sellingPriceGeneral = parseFloat(values.sellingPriceGeneral);
   if (values.sellingPriceMember) values.sellingPriceMember = parseFloat(values.sellingPriceMember);
   if (values.points) values.points = parseFloat(values.points);
 
-  // Add computed fields
   values.profitMargin = this.getProfitMargin();
   values.isLowStock = this.isLowStock();
   values.isOutOfStock = this.isOutOfStock();
@@ -328,7 +306,7 @@ Product.prototype.toJSON = function () {
 };
 
 // ============================================
-// STATIC METHODS
+// STATIC METHODS - ✅ REMOVED isActive FILTERS
 // ============================================
 
 Product.generateSKU = async function () {
@@ -358,33 +336,35 @@ Product.generateSKU = async function () {
   return `PRD-${dateStr}-${paddedNumber}`;
 };
 
+// ✅ FIXED: Remove isActive filter - search ALL products
 Product.findByBarcode = async function (barcode) {
   return await this.findOne({
-    where: { barcode, isActive: true },
+    where: { barcode },
   });
 };
 
+// ✅ FIXED: Remove isActive filter
 Product.findBySKU = async function (sku) {
   return await this.findOne({
-    where: { sku, isActive: true },
+    where: { sku },
   });
 };
 
+// ✅ FIXED: Remove isActive filter
 Product.getLowStock = async function () {
   const { Op } = require("sequelize");
   return await this.findAll({
     where: {
-      isActive: true,
       [Op.or]: [sequelize.where(sequelize.col("stock"), "<=", sequelize.col("min_stock"))],
     },
     order: [["stock", "ASC"]],
   });
 };
 
+// ✅ FIXED: Remove isActive filter
 Product.getOutOfStock = async function () {
   return await this.findAll({
     where: {
-      isActive: true,
       stock: 0,
     },
     order: [["name", "ASC"]],

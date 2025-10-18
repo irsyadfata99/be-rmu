@@ -17,12 +17,7 @@ const { authenticate, authorize } = require("../middlewares/auth");
  * @desc    Get payment statistics (member & supplier debts)
  * @access  Private (ADMIN, KASIR)
  */
-router.get(
-  "/stats",
-  authenticate,
-  authorize(["ADMIN", "KASIR"]),
-  PaymentController.getStats
-);
+router.get("/stats", authenticate, authorize(["ADMIN", "KASIR"]), PaymentController.getStats);
 
 // ============================================
 // MEMBER DEBT PAYMENT (PIUTANG DARI MEMBER)
@@ -33,12 +28,7 @@ router.get(
  * @desc    Get all member debts with pagination
  * @access  Private (ADMIN, KASIR)
  */
-router.get(
-  "/member-debts",
-  authenticate,
-  authorize(["ADMIN", "KASIR"]),
-  PaymentController.getMemberDebts
-);
+router.get("/member-debts", authenticate, authorize(["ADMIN", "KASIR"]), PaymentController.getMemberDebts);
 
 /**
  * ⚠️ CRITICAL: Export route MUST come BEFORE dynamic routes
@@ -46,48 +36,35 @@ router.get(
  * @desc    Export member debts to Excel
  * @access  Private (ADMIN, KASIR)
  */
-router.get(
-  "/member-debts/export",
-  authenticate,
-  authorize(["ADMIN", "KASIR"]),
-  PaymentController.exportMemberDebts
-);
+router.get("/member-debts/export", authenticate, authorize(["ADMIN", "KASIR"]), PaymentController.exportMemberDebts);
 
 /**
  * @route   GET /api/payments/member-debts/member/:memberId
  * @desc    Get all debts by specific member
  * @access  Private (ADMIN, KASIR)
  */
-router.get(
-  "/member-debts/member/:memberId",
-  authenticate,
-  authorize(["ADMIN", "KASIR"]),
-  PaymentController.getMemberDebtsByMember
-);
+router.get("/member-debts/member/:memberId", authenticate, authorize(["ADMIN", "KASIR"]), PaymentController.getMemberDebtsByMember);
 
 /**
  * @route   GET /api/payments/member-debts/:debtId
  * @desc    Get member debt detail
  * @access  Private (ADMIN, KASIR)
  */
-router.get(
-  "/member-debts/:debtId",
-  authenticate,
-  authorize(["ADMIN", "KASIR"]),
-  PaymentController.getMemberDebtDetail
-);
+router.get("/member-debts/:debtId", authenticate, authorize(["ADMIN", "KASIR"]), PaymentController.getMemberDebtDetail);
 
 /**
  * @route   POST /api/payments/member-debts/:debtId/pay
  * @desc    Pay member debt (cicilan hutang member)
  * @access  Private (ADMIN, KASIR)
  */
-router.post(
-  "/member-debts/:debtId/pay",
-  authenticate,
-  authorize(["ADMIN", "KASIR"]),
-  PaymentController.payMemberDebt
-);
+router.post("/member-debts/:debtId/pay", authenticate, authorize(["ADMIN", "KASIR"]), PaymentController.payMemberDebt);
+
+/**
+ * @route   GET /api/payments/member-debts/:debtId/print-receipt/:paymentId
+ * @desc    Print debt payment receipt
+ * @access  Private (ADMIN, KASIR)
+ */
+router.get("/member-debts/:debtId/print-receipt/:paymentId", authenticate, authorize(["ADMIN", "KASIR"]), PaymentController.printDebtPaymentReceipt);
 
 // ============================================
 // SUPPLIER DEBT PAYMENT (HUTANG KE SUPPLIER)
@@ -98,12 +75,7 @@ router.post(
  * @desc    Get all supplier debts with pagination
  * @access  Private (ADMIN, KASIR)
  */
-router.get(
-  "/supplier-debts",
-  authenticate,
-  authorize(["ADMIN", "KASIR"]),
-  PaymentController.getSupplierDebts
-);
+router.get("/supplier-debts", authenticate, authorize(["ADMIN", "KASIR"]), PaymentController.getSupplierDebts);
 
 /**
  * ⚠️ CRITICAL: Export route MUST come BEFORE dynamic routes
@@ -111,47 +83,27 @@ router.get(
  * @desc    Export supplier debts to Excel
  * @access  Private (ADMIN, KASIR)
  */
-router.get(
-  "/supplier-debts/export",
-  authenticate,
-  authorize(["ADMIN", "KASIR"]),
-  PaymentController.exportSupplierDebts
-);
+router.get("/supplier-debts/export", authenticate, authorize(["ADMIN", "KASIR"]), PaymentController.exportSupplierDebts);
 
 /**
  * @route   GET /api/payments/supplier-debts/supplier/:supplierId/list
  * @desc    Get all debts to specific supplier
  * @access  Private (ADMIN, KASIR)
  */
-router.get(
-  "/supplier-debts/supplier/:supplierId/list",
-  authenticate,
-  authorize(["ADMIN", "KASIR"]),
-  PaymentController.getSupplierDebtsBySupplier
-);
+router.get("/supplier-debts/supplier/:supplierId/list", authenticate, authorize(["ADMIN", "KASIR"]), PaymentController.getSupplierDebtsBySupplier);
 
 /**
  * @route   GET /api/payments/supplier-debts/:debtId
  * @desc    Get supplier debt detail
  * @access  Private (ADMIN, KASIR)
  */
-router.get(
-  "/supplier-debts/:debtId",
-  authenticate,
-  authorize(["ADMIN", "KASIR"]),
-  PaymentController.getSupplierDebtDetail
-);
+router.get("/supplier-debts/:debtId", authenticate, authorize(["ADMIN", "KASIR"]), PaymentController.getSupplierDebtDetail);
 
 /**
  * @route   POST /api/payments/supplier-debts/:debtId/pay
  * @desc    Pay supplier debt (bayar hutang ke supplier)
  * @access  Private (ADMIN, KASIR)
  */
-router.post(
-  "/supplier-debts/:debtId/pay",
-  authenticate,
-  authorize(["ADMIN", "KASIR"]),
-  PaymentController.paySupplierDebt
-);
+router.post("/supplier-debts/:debtId/pay", authenticate, authorize(["ADMIN", "KASIR"]), PaymentController.paySupplierDebt);
 
 module.exports = router;
