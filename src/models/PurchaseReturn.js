@@ -1,5 +1,5 @@
 // ============================================
-// src/models/PurchaseReturn.js (VERIFIED - NO MANUAL ASSOCIATIONS)
+// src/models/PurchaseReturn.js (OPTIMIZED - NO DUPLICATE INDEXES)
 // ============================================
 const { DataTypes } = require("sequelize");
 const { sequelize } = require("../config/database");
@@ -45,7 +45,7 @@ const PurchaseReturn = sequelize.define(
     returnNumber: {
       type: DataTypes.STRING(50),
       allowNull: false,
-      unique: true,
+      unique: true, // ✅ Index otomatis dari unique
       comment: "Nomor retur (auto-generate)",
     },
     returnDate: {
@@ -84,21 +84,16 @@ const PurchaseReturn = sequelize.define(
     timestamps: true,
     underscored: true,
     indexes: [
+      // ❌ HAPUS: return_number (sudah unique di field definition)
+      // ❌ HAPUS: purchase_id (sudah ada index dari foreign key)
       {
-        unique: true,
-        fields: ["return_number"],
+        fields: ["supplier_id"], // ✅ Keep
       },
       {
-        fields: ["purchase_id"],
+        fields: ["return_date"], // ✅ Keep
       },
       {
-        fields: ["supplier_id"],
-      },
-      {
-        fields: ["return_date"],
-      },
-      {
-        fields: ["status"],
+        fields: ["status"], // ✅ Keep
       },
     ],
   }
@@ -172,12 +167,8 @@ const PurchaseReturnItem = sequelize.define(
     timestamps: true,
     underscored: true,
     indexes: [
-      {
-        fields: ["purchase_return_id"],
-      },
-      {
-        fields: ["product_id"],
-      },
+      // ❌ HAPUS: purchase_return_id (sudah ada dari foreign key)
+      // ❌ HAPUS: product_id (sudah ada dari foreign key)
     ],
   }
 );

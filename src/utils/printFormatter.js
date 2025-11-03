@@ -2,13 +2,15 @@
 // src/utils/printFormatter.js
 // Utility untuk format template print (Dot Matrix & Thermal)
 // ✅ OPTIMIZED: 9.5" x 11" continuous form, 15 items per page
+// ✅ UPDATED: Thermal receipt 58mm x 150mm dengan font lebih besar
 // ============================================
 const { terbilang, formatCurrency } = require("./terbilang");
 const Setting = require("../models/Setting");
 
 /**
+/**
  * Generate Dot Matrix Invoice HTML (Continuous Form - 9.5" x 11")
- * Format untuk transaksi KREDIT - 15 items per page
+ * Format untuk transaksi KREDIT - Fixed page size, auto pagination
  */
 async function generateDotMatrixInvoice(saleData) {
   const { invoiceNumber, saleDate, member, items, totalAmount, discountAmount, finalAmount, dpAmount, remainingDebt, dueDate, notes } = saleData;
@@ -40,138 +42,38 @@ async function generateDotMatrixInvoice(saleData) {
   const memberArea = member ? `${member.regionCode} (${member.regionName})` : "-";
   const memberId = member ? member.uniqueId : "-";
 
-  // Split items into chunks of 15
-  const itemsPerPage = 15;
-  const itemChunks = [];
-  for (let i = 0; i < items.length; i += itemsPerPage) {
-    itemChunks.push(items.slice(i, i + itemsPerPage));
-  }
+  // Generate ALL items in one go (no manual chunking)
+  let itemsHtml = "";
+  items.forEach((item, index) => {
+    const no = String(index + 1);
+    const qty = String(item.quantity);
+    const unit = item.unit;
+    const name = item.productName.substring(0, 35);
+    const price = formatCurrency(item.sellingPrice);
+    const subtotal = formatCurrency(item.subtotal);
 
-  // Generate items table HTML for each page
-  let pagesHtml = "";
-
-  itemChunks.forEach((chunk, pageIndex) => {
-    const isFirstPage = pageIndex === 0;
-    const isLastPage = pageIndex === itemChunks.length - 1;
-
-    // Generate items for this page
-    let itemsHtml = "";
-    chunk.forEach((item, index) => {
-      const globalIndex = pageIndex * itemsPerPage + index + 1;
-      const no = String(globalIndex).padEnd(3);
-      const qty = String(item.quantity).padEnd(4);
-      const unit = item.unit.padEnd(7);
-      const name = item.productName.substring(0, 25).padEnd(25);
-      const price = formatCurrency(item.sellingPrice).padStart(12);
-      const disc = item.discountAmount ? formatCurrency(item.discountAmount).padStart(8) : "-".padStart(8);
-      const subtotal = formatCurrency(item.subtotal).padStart(14);
-
-      itemsHtml += `${no} ${qty} ${unit} ${name} ${price} ${disc} ${subtotal}\n`;
-    });
-
-    // Build page content
-    pagesHtml += `
-<div class="page ${isFirstPage ? "first-page" : "continuation-page"}">
-  ${
-    isFirstPage
-      ? `
-  <!-- Header hanya di halaman pertama -->
-  <div class="header">
-    <div style="font-weight: bold; font-size: 10pt;">${companyName}</div>
-    <div>${companyAddress}</div>
-    <div>${companyPhone}</div>
-    <div>${companyWebsite}</div>
-  </div>
-  <div class="line"></div>
-
-  <div class="info-row">
-    <span>Faktur No.: ${invoiceNumber}</span>
-    <span>${companyCity}, ${formattedDate}</span>
-  </div>
-
-  <div class="line"></div>
-
-  <div class="info-grid">
-    <div>Kepada Yth.</div>
-    <div>
-      <div>ID MEMBER : ${memberId}</div>
-      <div>NAMA      : ${memberName}</div>
-      <div>AREA      : ${memberArea}</div>
-      ${dueDate ? `<div>JATUH TEMPO: ${formattedDueDate}</div>` : ""}
-    </div>
-  </div>
-
-  <div class="line"></div>
-  `
-      : `
-  <!-- Lanjutan halaman ${pageIndex + 1} -->
-  <div style="margin-bottom: 3mm; font-weight: bold;">Faktur No.: ${invoiceNumber} - Halaman ${pageIndex + 1}</div>
-  <div class="line"></div>
-  `
-  }
-
-  <pre class="table-header">No  Qty  Satuan  Nama Barang               Harga       Disc     Jumlah</pre>
-  <div class="line"></div>
-  <pre class="items-content">${itemsHtml}</pre>
-  <div class="line"></div>
-
-  ${
-    isLastPage
-      ? `
-  <!-- Footer hanya di halaman terakhir -->
-  <div class="compact-spacing"><strong>TERBILANG:</strong> ${terbilang(finalAmount)}</div>
-
-  <div class="line"></div>
-
-  <div class="footer-section">
-    <div>
-      <div class="compact-spacing">Setiap pembayaran harap</div>
-      <div class="compact-spacing">ditransfer langsung ke rekening:</div>
-      <div class="compact-spacing"><strong>${bankName}: ${bankAccount}</strong></div>
-      <div class="compact-spacing"><strong>${bankAccountName}</strong></div>
-    </div>
-    <div style="text-align: right;">
-      <div class="compact-spacing">TOTAL FAKTUR  : ${formatCurrency(totalAmount)}</div>
-      ${discountAmount > 0 ? `<div class="compact-spacing">JUMLAH DISC   : ${formatCurrency(discountAmount)}</div>` : ""}
-      <div class="compact-spacing">JUMLAH BAYAR  : ${formatCurrency(finalAmount)}</div>
-      ${dpAmount > 0 ? `<div class="compact-spacing">DP            : ${formatCurrency(dpAmount)}</div>` : ""}
-      <div class="compact-spacing"><strong>SISA KREDIT   : ${formatCurrency(remainingDebt)}</strong></div>
-    </div>
-  </div>
-
-  ${notes ? `<div class="compact-spacing" style="margin-top: 2mm;">Catatan: ${notes}</div>` : ""}
-
-  <div class="footer-section" style="margin-top: 8mm;">
-    <div class="signature">
-      <div>Yang menerima,</div>
-      <div class="signature-line"></div>
-    </div>
-    <div class="signature">
-      <div>Hormat Kami,</div>
-      <div class="signature-line"></div>
-    </div>
-  </div>
-
-  <div class="line" style="margin-top: 3mm;"></div>
-  <div style="text-align: center; margin-top: 2mm;">======== Terima kasih ========</div>
-  `
-      : ""
-  }
-</div>
-${!isLastPage ? '<div class="page-break"></div>' : ""}
-`;
+    itemsHtml += `
+      <tr>
+        <td style="text-align: left;">${no}</td>
+        <td style="text-align: center;">${qty}</td>
+        <td style="text-align: left;">${unit}</td>
+        <td style="text-align: left;">${name}</td>
+        <td style="text-align: right; white-space: nowrap; padding-right: 18mm;">${price}</td>
+        <td style="text-align: right; white-space: nowrap; padding-right: 18mm;">${subtotal}</td>
+      </tr>
+    `;
   });
 
-  // HTML Template - 9.5" x 11" Continuous Form
+  // Single page with all content (browser handles pagination automatically)
   const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <title>Faktur ${invoiceNumber}</title>
   <style>
-    /* ✅ OPTIMIZED: 9.5" x 11" continuous form, safe margins */
+    /* ✅ FIXED PAGE SIZE: 9.5" x 11" - Browser auto-paginates */
     @page {
-      size: 9.5in auto; /* ← UBAH: auto height agar tidak fixed 11in */
+      size: 9.5in 11in;
       margin: 0;
     }
     
@@ -182,124 +84,191 @@ ${!isLastPage ? '<div class="page-break"></div>' : ""}
     }
     
     body {
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 8.5pt;
-      line-height: 1.05;
+      font-family: 'Tahoma', Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.15;
       margin: 0;
-      padding: 0;
+      padding: 3mm 5mm;
       width: 9.5in;
-    }
-    
-    .page {
-      padding: 4mm 8mm;
-      /* ← HAPUS: min-height: 11in; */
-      position: relative;
     }
     
     .header {
       text-align: center;
-      line-height: 1.15;
-      margin-bottom: 3mm;
+      line-height: 1.25;
+      margin-bottom: 2mm;
     }
     
     .line {
       border-bottom: 1px solid #000;
-      margin: 1.5mm 0;
+      margin: 1.2mm 0;
     }
     
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      margin: 0.5mm 0;
+    .kepada-section {
+      margin: 1.2mm 0;
     }
     
-    .info-grid {
-      display: grid;
-      grid-template-columns: 90px 1fr;
-      gap: 2mm;
-      margin: 1mm 0;
+    .kepada-section table {
+      border-collapse: collapse;
+      font-size: 11pt;
+      width: 100%;
+    }
+    
+    .kepada-section td {
+      padding: 0.6mm 0;
+      border: none;
+    }
+    
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.2mm 0;
+    }
+    
+    .items-table th,
+    .items-table td {
+      padding: 1.2mm 1mm;
+      border: none;
+    }
+    
+    .items-table thead th {
+      font-weight: bold;
+      border-bottom: 1px solid #000;
+    }
+    
+    .items-table tbody tr {
+      page-break-inside: avoid;
     }
     
     .footer-section {
-      margin-top: 3mm;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10mm;
+      margin-top: 2.5mm;
+      display: flex;
+      justify-content: space-between;
+      gap: 8mm;
+      page-break-inside: avoid;
     }
     
     .signature {
       text-align: center;
-      margin-top: 12mm;
+      margin-top: 8mm;
     }
     
     .signature-line {
-      margin-top: 12mm;
+      margin-top: 10mm;
       border-top: 1px solid #000;
-      width: 120px;
+      width: 130px;
       display: inline-block;
     }
     
-    pre {
-      margin: 0;
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 8.5pt;
-      line-height: 1.05;
-      white-space: pre;
-    }
-    
     .compact-spacing {
-      margin: 1mm 0;
+      margin: 0.8mm 0;
     }
     
-    .page-break {
-      page-break-after: always;
-      break-after: page;
-    }
-    
-    .table-header {
-      font-weight: bold;
-    }
-    
-    /* ✅ TAMBAHAN: Hide page numbers & URL di print */
     @media print {
-      @page {
-        margin: 0; /* Remove default margins */
-      }
-      
       body {
-        padding: 0;
-        margin: 0;
-      }
-      
-      .page {
-        page-break-after: auto;
-      }
-      
-      .page-break {
-        page-break-after: always;
-        break-after: page;
+        padding: 3mm 5mm;
       }
       
       button, .no-print {
         display: none !important;
       }
-      
-      /* ✅ Hide browser URL & page counter */
-      @page {
-        margin: 0;
-        size: 9.5in auto;
-      }
-      
-      /* Hide header & footer pada preview print Chrome/Edge */
-      html, body {
-        margin: 0 !important;
-        padding: 0 !important;
-      }
     }
   </style>
 </head>
 <body>
-${pagesHtml}
+  <!-- Header -->
+  <div class="header">
+    <div style="font-weight: bold; font-size: 12pt; margin-bottom: 2mm;">${companyName}</div>
+    <div>${companyAddress}  ${companyPhone}</div>
+    <div>${companyWebsite}</div>
+  </div>
+  <div class="line"></div>
+
+  <!-- Faktur Info -->
+  <table style="width: 100%; border: none; margin: 1mm 0;">
+    <tr>
+      <td style="width: 50%; border: none; text-align: left;">Faktur No.: ${invoiceNumber}</td>
+      <td style="width: 50%; border: none; text-align: right; padding-right: 18mm;">${companyCity}, ${formattedDate}</td>
+    </tr>
+  </table>
+
+  <div class="line"></div>
+
+  <!-- Member Info -->
+  <div class="kepada-section">
+    <div style="margin-bottom: 1mm;">Kepada Yth.</div>
+    <table>
+      <tr>
+        <td style="width: 18%;">ID MEMBER</td>
+        <td style="width: 2%;">:</td>
+        <td style="width: 30%;">${memberId}</td>
+        <td style="width: 18%;">AREA</td>
+        <td style="width: 2%;">:</td>
+        <td style="width: 30%; padding-right: 18mm;">${memberArea}</td>
+      </tr>
+      <tr>
+        <td>NAMA</td>
+        <td>:</td>
+        <td>${memberName}</td>
+        <td>JATUH TEMPO</td>
+        <td>:</td>
+        <td style="padding-right: 18mm;">${dueDate ? formattedDueDate : "-"}</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="line"></div>
+
+  <!-- Items Table -->
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="text-align: left; width: 5%;">No</th>
+        <th style="text-align: center; width: 8%;">Qty</th>
+        <th style="text-align: left; width: 12%;">Satuan</th>
+        <th style="text-align: left; width: 45%;">Nama Barang</th>
+        <th style="text-align: right; width: 15%; white-space: nowrap; padding-right: 18mm;">Harga</th>
+        <th style="text-align: right; width: 15%; white-space: nowrap; padding-right: 18mm;">Jumlah</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemsHtml}
+    </tbody>
+  </table>
+  <div class="line"></div>
+
+  <!-- Footer -->
+  <div class="compact-spacing"><strong>TERBILANG:</strong> ${terbilang(finalAmount)}</div>
+
+  <div class="line"></div>
+
+  <div class="footer-section">
+    <div style="flex: 1.2;">
+      <div class="compact-spacing">Setiap pembayaran harap ditransfer langsung ke rekening:</div>
+      <div class="compact-spacing"><strong>${bankName}: ${bankAccount}</strong></div>
+      <div class="compact-spacing"><strong>${bankAccountName}</strong></div>
+    </div>
+    <div style="flex: 0.8; padding-right: 18mm;">
+      <div class="compact-spacing" style="text-align: right;">TOTAL FAKTUR  : ${formatCurrency(finalAmount)}</div>
+      <div class="compact-spacing" style="text-align: right;">DOWN PAYMENT  : ${dpAmount > 0 ? formatCurrency(dpAmount) : "-"}</div>
+      <div class="compact-spacing" style="text-align: right;"><strong>SISA KREDIT   : ${formatCurrency(remainingDebt)}</strong></div>
+    </div>
+  </div>
+
+  ${notes ? `<div class="compact-spacing" style="margin-top: 2mm;">Catatan: ${notes}</div>` : ""}
+
+  <div class="footer-section" style="margin-top: 5mm;">
+    <div class="signature">
+      <div>Yang menerima,</div>
+      <div class="signature-line"></div>
+    </div>
+    <div class="signature">
+      <div>Hormat Kami,</div>
+      <div class="signature-line"></div>
+    </div>
+  </div>
+
+  <div class="line" style="margin-top: 2mm;"></div>
+  <div style="text-align: center; margin-top: 1mm;">======== Terima kasih ========</div>
 
 <script type="text/javascript">
 (function() {
@@ -308,12 +277,6 @@ ${pagesHtml}
   function doPrint() {
     if (!printed) {
       printed = true;
-      
-      // ✅ TAMBAHAN: Set print options via CSS before print
-      var style = document.createElement('style');
-      style.textContent = '@page { margin: 0; size: 9.5in auto; }';
-      document.head.appendChild(style);
-      
       window.print();
     }
   }
@@ -344,8 +307,8 @@ ${pagesHtml}
 }
 
 /**
- * Generate Thermal Receipt HTML (58mm width)
- * Format untuk transaksi TUNAI
+ * Generate Thermal Receipt HTML (58mm x auto)
+ * Format untuk transaksi TUNAI - Layout sesuai standar thermal receipt
  */
 async function generateThermalReceipt(saleData) {
   const { invoiceNumber, saleDate, member, user, items, totalAmount, discountAmount, finalAmount, paymentReceived, changeAmount } = saleData;
@@ -357,8 +320,8 @@ async function generateThermalReceipt(saleData) {
 
   // Format date & time
   const date = new Date(saleDate);
-  const formattedDate = `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
-  const formattedTime = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const formattedDate = `${String(date.getDate()).padStart(2, "0")}-${String(date.getMonth() + 1).padStart(2, "0")}-${date.getFullYear()}`;
+  const formattedTime = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}:${String(date.getSeconds()).padStart(2, "0")}`;
 
   // Member info
   const memberId = member ? member.uniqueId : "-";
@@ -368,13 +331,15 @@ async function generateThermalReceipt(saleData) {
   // Generate items
   let itemsHtml = "";
   items.forEach((item) => {
-    const name = item.productName.substring(0, 32);
+    const name = item.productName.substring(0, 30);
     const qty = item.quantity;
     const price = formatCurrency(item.sellingPrice);
-    const subtotal = formatCurrency(item.subtotal).padStart(22);
+    const subtotal = formatCurrency(item.subtotal);
 
-    itemsHtml += `${name}
-  ${qty} x ${price}${subtotal}\n\n`;
+    itemsHtml += `<div class="item">
+<div class="item-name">${name}</div>
+<div class="item-detail">${qty} x ${price}<span class="item-subtotal">${subtotal}</span></div>
+</div>\n`;
   });
 
   const html = `<!DOCTYPE html>
@@ -388,81 +353,257 @@ async function generateThermalReceipt(saleData) {
       margin: 0;
     }
     
-    body {
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 9pt;
-      line-height: 1.3;
+    * {
       margin: 0;
-      padding: 5mm;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: auto;
+      text-rendering: optimizeLegibility;
+    }
+    
+    html, body {
       width: 58mm;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 13pt;
+      font-weight: 600;
+      line-height: 1.3;
+      padding: 1mm 0mm 3mm 0mm;
+      color: #000;
+      background: #fff;
+      text-align: center;
+    }
+    
+    .wrapper {
+      max-width: 48mm;
+      margin: 0 auto;
+      padding: 0;
+      position: relative;
+      left: 1mm;
     }
     
     .header {
-      text-align: center;
-      font-weight: bold;
-      margin-bottom: 5px;
+      font-weight: 900;
+      font-size: 15pt;
+      margin-bottom: 1px;
+      letter-spacing: 0.3px;
+    }
+    
+    .subheader {
+      font-size: 12pt;
+      font-weight: 600;
+      line-height: 1.2;
+      margin-bottom: 0px;
+    }
+    
+    .datetime {
+      font-size: 12pt;
+      font-weight: 600;
+      margin: 2px 0 3px 0;
     }
     
     .line {
       border-bottom: 1px dashed #000;
-      margin: 5px 0;
+      margin: 2px 0;
+      width: 100%;
     }
     
-    .text-center {
-      text-align: center;
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10pt;
+      font-weight: 600;
+      margin: 1px 0;
+      text-align: left;
+      gap: 3px;
     }
     
-    pre {
-      margin: 0;
-      font-family: 'Courier New', Courier, monospace;
+    .info-label {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+    
+    .info-value {
+      flex: 1;
+      text-align: right;
+      word-break: break-word;
+      overflow-wrap: break-word;
+    }
+    
+    .item {
+      text-align: left;
+      margin: 2px 0;
+    }
+    
+    .item-name {
+      font-size: 10pt;
+      font-weight: 700;
+      margin-bottom: 1px;
+      word-wrap: break-word;
+    }
+    
+    .item-detail {
       font-size: 9pt;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      gap: 5px;
+    }
+    
+    .item-subtotal {
+      text-align: right;
+      white-space: nowrap;
+    }
+    
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11pt;
+      font-weight: 700;
+      margin: 1px 0;
+      gap: 3px;
+    }
+    
+    .total-label {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+    
+    .total-value {
+      flex: 1;
+      text-align: right;
+      overflow-wrap: break-word;
+    }
+    
+    .footer {
+      font-size: 12pt;
+      margin-top: 3px;
+      font-weight: 700;
     }
     
     @media print {
-      body { padding: 0; }
-      button { display: none !important; }
+      * {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        color-adjust: exact;
+      }
+      
+      html, body {
+        width: 58mm;
+      }
+      
+      body { 
+        padding: 1mm 0mm 3mm 0mm;
+        font-size: 13pt;
+        font-weight: 600;
+        -webkit-filter: contrast(1.3) brightness(0.95);
+        filter: contrast(1.3) brightness(0.95);
+        text-align: center;
+      }
+      
+      .wrapper {
+        max-width: 48mm;
+        margin: 0 auto;
+        padding: 0;
+        position: relative;
+        left: 1mm;
+      }
+      
+      button { 
+        display: none !important; 
+      }
+      
+      @page {
+        size: 58mm auto;
+        margin: 0;
+      }
     }
   </style>
 </head>
 <body>
-<div class="header">${companyName}</div>
-<div class="text-center">
-${companyAddress}
-${companyPhone}
-</div>
-<div class="line"></div>
-<pre>
-No: ${invoiceNumber}
-Tgl: ${formattedDate} ${formattedTime}
-Kasir: ${kasirName}
-${member ? `Member: ${memberId}` : ""}
-${member ? `Nama: ${memberName}` : ""}
-</pre>
-<div class="line"></div>
-<pre>${itemsHtml}</pre>
-<div class="line"></div>
-<pre>
-TOTAL             ${formatCurrency(totalAmount).padStart(16)}
-${discountAmount > 0 ? `DISCOUNT          ${formatCurrency(discountAmount).padStart(16)}` : ""}
-${discountAmount > 0 ? `BAYAR             ${formatCurrency(finalAmount).padStart(16)}` : ""}
-BAYAR             ${formatCurrency(paymentReceived).padStart(16)}
-KEMBALI           ${formatCurrency(changeAmount).padStart(16)}
-</pre>
-<div class="line"></div>
-<div class="text-center">
-<strong>Terima Kasih</strong><br>
-Belanja Lagi Ya!
-</div>
+  <div class="wrapper">
+  <div class="header">${companyName}</div>
+  <div class="subheader">${companyAddress}</div>
+  <div class="subheader">${companyPhone}</div>
+  <div class="datetime">${formattedDate} ${formattedTime}</div>
+  
+  <div class="line"></div>
+  
+  <div class="info-row">
+    <span class="info-label">NO</span>
+    <span class="info-value">: ${invoiceNumber}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">KASIR</span>
+    <span class="info-value">: ${kasirName}</span>
+  </div>
+  ${
+    member
+      ? `<div class="info-row">
+    <span class="info-label">MEMBER</span>
+    <span class="info-value">: ${memberId}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">NAMA</span>
+    <span class="info-value">: ${memberName}</span>
+  </div>`
+      : ""
+  }
+  
+  <div class="line"></div>
+  
+  ${itemsHtml}
+  
+  <div class="line"></div>
+  
+  <div class="total-row">
+    <span class="total-label">TOTAL</span>
+    <span class="total-value">: ${formatCurrency(totalAmount)}</span>
+  </div>
+  ${
+    discountAmount > 0
+      ? `<div class="total-row">
+    <span class="total-label">DISCOUNT</span>
+    <span class="total-value">: ${formatCurrency(discountAmount)}</span>
+  </div>
+  <div class="total-row">
+    <span class="total-label">GRAND TOTAL</span>
+    <span class="total-value">: ${formatCurrency(finalAmount)}</span>
+  </div>`
+      : ""
+  }
+  <div class="total-row">
+    <span class="total-label">BAYAR</span>
+    <span class="total-value">: ${formatCurrency(paymentReceived)}</span>
+  </div>
+  <div class="total-row">
+    <span class="total-label">KEMBALI</span>
+    <span class="total-value">: ${formatCurrency(changeAmount)}</span>
+  </div>
+  
+  <div class="line"></div>
+  
+  <div class="footer">
+    .: TERIMA KASIH :.
+  </div>
+  </div>
 
 <script type="text/javascript">
 (function() {
   var printed = false;
+  
   function doPrint() {
     if (!printed) {
       printed = true;
       window.print();
     }
   }
+  
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
       setTimeout(doPrint, 300);
@@ -470,9 +611,11 @@ Belanja Lagi Ya!
   } else {
     setTimeout(doPrint, 300);
   }
+  
   window.onload = function() {
     setTimeout(doPrint, 500);
   };
+  
   window.onafterprint = function() {
     setTimeout(function() {
       window.close();
@@ -487,7 +630,7 @@ Belanja Lagi Ya!
 }
 
 /**
- * Generate Debt Payment Receipt (Thermal 58mm)
+ * Generate Debt Payment Receipt (Thermal 58mm x auto)
  * Format untuk bukti pembayaran cicilan hutang member
  */
 async function generateDebtPaymentReceipt(paymentData) {
@@ -500,8 +643,8 @@ async function generateDebtPaymentReceipt(paymentData) {
 
   // Format date & time
   const date = new Date(paymentDate);
-  const formattedDate = `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
-  const formattedTime = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const formattedDate = `${String(date.getDate()).padStart(2, "0")}-${String(date.getMonth() + 1).padStart(2, "0")}-${date.getFullYear()}`;
+  const formattedTime = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}:${String(date.getSeconds()).padStart(2, "0")}`;
 
   // Member info
   const memberId = member.uniqueId;
@@ -529,95 +672,253 @@ async function generateDebtPaymentReceipt(paymentData) {
       margin: 0;
     }
     
-    body {
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 9pt;
-      line-height: 1.3;
+    * {
       margin: 0;
-      padding: 5mm;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: auto;
+      text-rendering: optimizeLegibility;
+    }
+    
+    html, body {
       width: 58mm;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'Arial', 'Helvetica', sans-serif;
+      font-size: 13pt;
+      font-weight: 600;
+      line-height: 1.3;
+      padding: 1mm 0mm 3mm 0mm;
+      color: #000;
+      background: #fff;
+      text-align: center;
+    }
+    
+    .wrapper {
+      max-width: 48mm;
+      margin: 0 auto;
+      padding: 0;
+      position: relative;
+      left: 1mm;
     }
     
     .header {
-      text-align: center;
-      font-weight: bold;
-      margin-bottom: 5px;
+      font-weight: 900;
+      font-size: 15pt;
+      margin-bottom: 1px;
+      letter-spacing: 0.3px;
+    }
+    
+    .subheader {
+      font-size: 12pt;
+      font-weight: 600;
+      line-height: 1.2;
+      margin-bottom: 0px;
+    }
+    
+    .datetime {
+      font-size: 12pt;
+      font-weight: 600;
+      margin: 2px 0 3px 0;
+    }
+    
+    .section-title {
+      font-size: 13pt;
+      font-weight: 900;
+      margin: 3px 0;
+      letter-spacing: 0.3px;
     }
     
     .line {
       border-bottom: 1px dashed #000;
-      margin: 5px 0;
+      margin: 2px 0;
+      width: 100%;
     }
     
-    .text-center {
-      text-align: center;
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10pt;
+      font-weight: 600;
+      margin: 1px 0;
+      text-align: left;
+      gap: 3px;
     }
     
-    .text-right {
+    .info-label {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+    
+    .info-value {
+      flex: 1;
       text-align: right;
+      word-break: break-word;
+      overflow-wrap: break-word;
     }
     
-    .bold {
-      font-weight: bold;
+    .amount-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10pt;
+      font-weight: 700;
+      margin: 1px 0;
+      gap: 3px;
     }
     
-    pre {
-      margin: 0;
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 9pt;
+    .amount-label {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+    
+    .amount-value {
+      flex: 1;
+      text-align: right;
+      overflow-wrap: break-word;
+    }
+    
+    .highlight {
+      font-size: 11pt;
+      font-weight: 900;
+    }
+    
+    .footer {
+      font-size: 12pt;
+      margin-top: 3px;
+      font-weight: 700;
     }
     
     @media print {
-      body { padding: 0; }
-      button { display: none !important; }
+      * {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        color-adjust: exact;
+      }
+      
+      html, body {
+        width: 58mm;
+      }
+      
+      body { 
+        padding: 1mm 0mm 3mm 0mm;
+        font-size: 13pt;
+        font-weight: 600;
+        -webkit-filter: contrast(1.3) brightness(0.95);
+        filter: contrast(1.3) brightness(0.95);
+        text-align: center;
+      }
+      
+      .wrapper {
+        max-width: 48mm;
+        margin: 0 auto;
+        padding: 0;
+        position: relative;
+        left: 1mm;
+      }
+      
+      button { 
+        display: none !important; 
+      }
+      
+      @page {
+        size: 58mm auto;
+        margin: 0;
+      }
     }
   </style>
 </head>
 <body>
-<div class="header">${companyName}</div>
-<div class="text-center">
-${companyAddress}
-${companyPhone}
-</div>
-<div class="line"></div>
-
-<div class="header">BUKTI PEMBAYARAN HUTANG</div>
-
-<div class="line"></div>
-<pre>
-No Bukti : ${receiptNumber}
-Tgl Bayar: ${formattedDate} ${formattedTime}
-Kasir    : ${kasirName}
-</pre>
-<div class="line"></div>
-<pre>
-ID Member: ${memberId}
-Nama     : ${memberName}
-Wilayah  : ${memberRegion}
-</pre>
-<div class="line"></div>
-<pre>
-No Faktur: ${debt.invoiceNumber}
-
-RINCIAN PEMBAYARAN:
-Total Hutang      ${formatCurrency(debt.totalAmount).padStart(16)}
-Sudah Dibayar     ${formatCurrency(debt.paidAmount - payment.amount).padStart(16)}
-<strong>Bayar Sekarang    ${formatCurrency(payment.amount).padStart(16)}</strong>
-</pre>
-<div class="line"></div>
-<pre>
-<strong>SISA HUTANG       ${formatCurrency(debt.remainingAmount).padStart(16)}</strong>
-</pre>
-<div class="line"></div>
-<pre>
-Metode Bayar: ${paymentMethodLabel}
-${payment.notes ? `Catatan: ${payment.notes}` : ""}
-</pre>
-<div class="line"></div>
-<div class="text-center">
-<strong>Terima Kasih</strong><br>
-Mohon Simpan Bukti Ini
-</div>
+  <div class="wrapper">
+  <div class="header">${companyName}</div>
+  <div class="subheader">${companyAddress}</div>
+  <div class="subheader">${companyPhone}</div>
+  <div class="datetime">${formattedDate} ${formattedTime}</div>
+  
+  <div class="line"></div>
+  
+  <div class="section-title">BUKTI PEMBAYARAN HUTANG</div>
+  
+  <div class="line"></div>
+  
+  <div class="info-row">
+    <span class="info-label">NO BUKTI</span>
+    <span class="info-value">: ${receiptNumber}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">KASIR</span>
+    <span class="info-value">: ${kasirName}</span>
+  </div>
+  
+  <div class="line"></div>
+  
+  <div class="info-row">
+    <span class="info-label">ID MEMBER</span>
+    <span class="info-value">: ${memberId}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">NAMA</span>
+    <span class="info-value">: ${memberName}</span>
+  </div>
+  <div class="info-row">
+    <span class="info-label">WILAYAH</span>
+    <span class="info-value">: ${memberRegion}</span>
+  </div>
+  
+  <div class="line"></div>
+  
+  <div class="info-row">
+    <span class="info-label">NO FAKTUR</span>
+    <span class="info-value">: ${debt.invoiceNumber}</span>
+  </div>
+  
+  <div class="line"></div>
+  
+  <div class="amount-row">
+    <span class="amount-label">Total Hutang</span>
+    <span class="amount-value">: ${formatCurrency(debt.totalAmount)}</span>
+  </div>
+  <div class="amount-row">
+    <span class="amount-label">Sudah Dibayar</span>
+    <span class="amount-value">: ${formatCurrency(debt.paidAmount - payment.amount)}</span>
+  </div>
+  <div class="amount-row highlight">
+    <span class="amount-label">Bayar Sekarang</span>
+    <span class="amount-value">: ${formatCurrency(payment.amount)}</span>
+  </div>
+  
+  <div class="line"></div>
+  
+  <div class="amount-row highlight">
+    <span class="amount-label">SISA HUTANG</span>
+    <span class="amount-value">: ${formatCurrency(debt.remainingAmount)}</span>
+  </div>
+  
+  <div class="line"></div>
+  
+  <div class="info-row">
+    <span class="info-label">METODE BAYAR</span>
+    <span class="info-value">: ${paymentMethodLabel}</span>
+  </div>
+  ${
+    payment.notes
+      ? `<div class="info-row">
+    <span class="info-label">CATATAN</span>
+    <span class="info-value">: ${payment.notes}</span>
+  </div>`
+      : ""
+  }
+  
+  <div class="line"></div>
+  
+  <div class="footer">
+    .: TERIMA KASIH :.<br>
+    Mohon Simpan Bukti Ini
+  </div>
+  </div>
 
 <script type="text/javascript">
 (function() {
