@@ -17,7 +17,7 @@ async function generateDotMatrixInvoice(saleData) {
 
   // Get settings
   const companyName = await Setting.get("company_name", "KOPERASI YAMUGHNI");
-  const companyAddress = await Setting.get("company_address", "Jalan Kaum No. 4 Samping Terminal Cicaheum");
+  const companyAddress = await Setting.get("company_address", "Jalan Kaum No. 2 Samping Terminal Cicaheum");
   const companyPhone = await Setting.get("company_phone", "Telepon (022) 20503787, 085877877877");
   const companyWebsite = await Setting.get("company_website", "www.yamughni.info");
   const companyCity = await Setting.get("company_city", "Bandung");
@@ -315,7 +315,7 @@ async function generateThermalReceipt(saleData) {
 
   // Get settings
   const companyName = await Setting.get("company_name", "KOPERASI YAMUGHNI");
-  const companyAddress = await Setting.get("company_address", "Jl. Kaum No. 4 Cicaheum");
+  const companyAddress = await Setting.get("company_address", "Jl. Kaum No. 2 Cicaheum");
   const companyPhone = await Setting.get("company_phone", "Telp: (022) 20503787");
 
   // Format date & time
@@ -349,7 +349,7 @@ async function generateThermalReceipt(saleData) {
   <title>Struk ${invoiceNumber}</title>
   <style>
     @page {
-      size: 58mm auto;
+      size: 80mm auto;
       margin: 0;
     }
     
@@ -363,64 +363,62 @@ async function generateThermalReceipt(saleData) {
     }
     
     html, body {
-      width: 58mm;
+      width: 80mm;
       margin: 0;
       padding: 0;
     }
     
     body {
       font-family: 'Arial', 'Helvetica', sans-serif;
-      font-size: 13pt;
+      font-size: 14pt;
       font-weight: 600;
       line-height: 1.3;
-      padding: 1mm 0mm 3mm 0mm;
+      padding: 3mm 0mm 3mm 0mm;
       color: #000;
       background: #fff;
       text-align: center;
     }
     
     .wrapper {
-      max-width: 48mm;
+      max-width: 72mm;
       margin: 0 auto;
       padding: 0;
-      position: relative;
-      left: 1mm;
     }
     
     .header {
       font-weight: 900;
-      font-size: 15pt;
-      margin-bottom: 1px;
+      font-size: 16pt;
+      margin-bottom: 2px;
       letter-spacing: 0.3px;
     }
     
     .subheader {
-      font-size: 12pt;
+      font-size: 13pt;
       font-weight: 600;
       line-height: 1.2;
-      margin-bottom: 0px;
+      margin-bottom: 1px;
     }
     
     .datetime {
-      font-size: 12pt;
+      font-size: 13pt;
       font-weight: 600;
-      margin: 2px 0 3px 0;
+      margin: 3px 0 4px 0;
     }
     
     .line {
       border-bottom: 1px dashed #000;
-      margin: 2px 0;
+      margin: 3px 0;
       width: 100%;
     }
     
     .info-row {
       display: flex;
       justify-content: space-between;
-      font-size: 10pt;
+      font-size: 12pt;
       font-weight: 600;
-      margin: 1px 0;
+      margin: 2px 0;
       text-align: left;
-      gap: 3px;
+      gap: 5px;
     }
     
     .info-label {
@@ -437,22 +435,22 @@ async function generateThermalReceipt(saleData) {
     
     .item {
       text-align: left;
-      margin: 2px 0;
+      margin: 3px 0;
     }
     
     .item-name {
-      font-size: 10pt;
+      font-size: 12pt;
       font-weight: 700;
       margin-bottom: 1px;
       word-wrap: break-word;
     }
     
     .item-detail {
-      font-size: 9pt;
+      font-size: 11pt;
       font-weight: 600;
       display: flex;
       justify-content: space-between;
-      gap: 5px;
+      gap: 8px;
     }
     
     .item-subtotal {
@@ -463,10 +461,10 @@ async function generateThermalReceipt(saleData) {
     .total-row {
       display: flex;
       justify-content: space-between;
-      font-size: 11pt;
+      font-size: 13pt;
       font-weight: 700;
-      margin: 1px 0;
-      gap: 3px;
+      margin: 2px 0;
+      gap: 5px;
     }
     
     .total-label {
@@ -481,8 +479,8 @@ async function generateThermalReceipt(saleData) {
     }
     
     .footer {
-      font-size: 12pt;
-      margin-top: 3px;
+      font-size: 13pt;
+      margin-top: 4px;
       font-weight: 700;
     }
     
@@ -494,12 +492,12 @@ async function generateThermalReceipt(saleData) {
       }
       
       html, body {
-        width: 58mm;
+        width: 80mm;
       }
       
       body { 
-        padding: 1mm 0mm 3mm 0mm;
-        font-size: 13pt;
+        padding: 3mm 0mm 8mm 0mm;
+        font-size: 14pt;
         font-weight: 600;
         -webkit-filter: contrast(1.3) brightness(0.95);
         filter: contrast(1.3) brightness(0.95);
@@ -507,11 +505,9 @@ async function generateThermalReceipt(saleData) {
       }
       
       .wrapper {
-        max-width: 48mm;
+        max-width: 72mm;
         margin: 0 auto;
         padding: 0;
-        position: relative;
-        left: 1mm;
       }
       
       button { 
@@ -519,7 +515,7 @@ async function generateThermalReceipt(saleData) {
       }
       
       @page {
-        size: 58mm auto;
+        size: 80mm auto;
         margin: 0;
       }
     }
@@ -638,7 +634,7 @@ async function generateDebtPaymentReceipt(paymentData) {
 
   // Get settings
   const companyName = await Setting.get("company_name", "KOPERASI YAMUGHNI");
-  const companyAddress = await Setting.get("company_address", "Jl. Kaum No. 4 Cicaheum");
+  const companyAddress = await Setting.get("company_address", "Jl. Kaum No. 2 Cicaheum");
   const companyPhone = await Setting.get("company_phone", "Telp: (022) 20503787");
 
   // Format date & time
@@ -668,7 +664,7 @@ async function generateDebtPaymentReceipt(paymentData) {
   <title>Bukti Pembayaran ${receiptNumber}</title>
   <style>
     @page {
-      size: 58mm auto;
+      size: 80mm auto;
       margin: 0;
     }
     
@@ -682,71 +678,69 @@ async function generateDebtPaymentReceipt(paymentData) {
     }
     
     html, body {
-      width: 58mm;
+      width: 80mm;
       margin: 0;
       padding: 0;
     }
     
     body {
       font-family: 'Arial', 'Helvetica', sans-serif;
-      font-size: 13pt;
+      font-size: 14pt;
       font-weight: 600;
       line-height: 1.3;
-      padding: 1mm 0mm 3mm 0mm;
+      padding: 3mm 0mm 3mm 0mm;
       color: #000;
       background: #fff;
       text-align: center;
     }
     
     .wrapper {
-      max-width: 48mm;
+      max-width: 72mm;
       margin: 0 auto;
       padding: 0;
-      position: relative;
-      left: 1mm;
     }
     
     .header {
       font-weight: 900;
-      font-size: 15pt;
-      margin-bottom: 1px;
+      font-size: 16pt;
+      margin-bottom: 2px;
       letter-spacing: 0.3px;
     }
     
     .subheader {
-      font-size: 12pt;
+      font-size: 13pt;
       font-weight: 600;
       line-height: 1.2;
-      margin-bottom: 0px;
+      margin-bottom: 1px;
     }
     
     .datetime {
-      font-size: 12pt;
+      font-size: 13pt;
       font-weight: 600;
-      margin: 2px 0 3px 0;
+      margin: 3px 0 4px 0;
     }
     
     .section-title {
-      font-size: 13pt;
+      font-size: 14pt;
       font-weight: 900;
-      margin: 3px 0;
+      margin: 4px 0;
       letter-spacing: 0.3px;
     }
     
     .line {
       border-bottom: 1px dashed #000;
-      margin: 2px 0;
+      margin: 3px 0;
       width: 100%;
     }
     
     .info-row {
       display: flex;
       justify-content: space-between;
-      font-size: 10pt;
+      font-size: 12pt;
       font-weight: 600;
-      margin: 1px 0;
+      margin: 2px 0;
       text-align: left;
-      gap: 3px;
+      gap: 5px;
     }
     
     .info-label {
@@ -764,10 +758,10 @@ async function generateDebtPaymentReceipt(paymentData) {
     .amount-row {
       display: flex;
       justify-content: space-between;
-      font-size: 10pt;
+      font-size: 12pt;
       font-weight: 700;
-      margin: 1px 0;
-      gap: 3px;
+      margin: 2px 0;
+      gap: 5px;
     }
     
     .amount-label {
@@ -782,13 +776,13 @@ async function generateDebtPaymentReceipt(paymentData) {
     }
     
     .highlight {
-      font-size: 11pt;
+      font-size: 13pt;
       font-weight: 900;
     }
     
     .footer {
-      font-size: 12pt;
-      margin-top: 3px;
+      font-size: 13pt;
+      margin-top: 4px;
       font-weight: 700;
     }
     
@@ -800,12 +794,12 @@ async function generateDebtPaymentReceipt(paymentData) {
       }
       
       html, body {
-        width: 58mm;
+        width: 80mm;
       }
       
       body { 
-        padding: 1mm 0mm 3mm 0mm;
-        font-size: 13pt;
+        padding: 3mm 0mm 3mm 0mm;
+        font-size: 14pt;
         font-weight: 600;
         -webkit-filter: contrast(1.3) brightness(0.95);
         filter: contrast(1.3) brightness(0.95);
@@ -813,11 +807,9 @@ async function generateDebtPaymentReceipt(paymentData) {
       }
       
       .wrapper {
-        max-width: 48mm;
+        max-width: 72mm;
         margin: 0 auto;
         padding: 0;
-        position: relative;
-        left: 1mm;
       }
       
       button { 
@@ -825,7 +817,7 @@ async function generateDebtPaymentReceipt(paymentData) {
       }
       
       @page {
-        size: 58mm auto;
+        size: 80mm auto;
         margin: 0;
       }
     }
@@ -864,7 +856,7 @@ async function generateDebtPaymentReceipt(paymentData) {
     <span class="info-value">: ${memberName}</span>
   </div>
   <div class="info-row">
-    <span class="info-label">WILAYAH</span>
+    <span class="info-label">UNIT KERJA</span>
     <span class="info-value">: ${memberRegion}</span>
   </div>
   
