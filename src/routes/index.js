@@ -19,7 +19,12 @@ const stockRoutes = require("./stockRoutes");
 const returnRoutes = require("./returnRoutes");
 const pointRoutes = require("./pointRoutes");
 const reportRoutes = require("./reportRoutes"); // ✨ NEW!
+const tagPostRoutes = require("./tagPostRoutes"); // ✨ NEW!
+const categoryPostRoutes = require("./categoryPostRoutes"); // ✨ NEW!
+const articleRoutes = require("./articleRoutes"); // ✨ NEW!
 
+const uploadArticle = require("../middlewares/uploadArticleImage");
+const MediaController = require("../controllers/MediaController");
 // ============================================
 // HEALTH CHECK
 // ============================================
@@ -49,6 +54,15 @@ router.use("/stock", stockRoutes);
 router.use("/returns", returnRoutes);
 router.use("/points", pointRoutes);
 router.use("/reports", reportRoutes); // ✨ NEW!
+router.use("/tagPost", tagPostRoutes); // ✨ NEW!
+router.use("/categoryPost", categoryPostRoutes); // ✨ NEW!
+router.use("/article", articleRoutes); // ✨ NEW!
+
+  router.post(
+    "/media/upload",
+    uploadArticle.single("file"),   
+    MediaController.upload
+  );
 
 // ============================================
 // API INFO (Root endpoint)

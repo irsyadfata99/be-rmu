@@ -17,7 +17,7 @@ const Product = sequelize.define(
     barcode: {
       type: DataTypes.STRING(50),
       allowNull: true,
-      unique: true,
+      // unique: true,
       comment: "Barcode produk untuk scanning",
     },
     sku: {

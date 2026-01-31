@@ -8,6 +8,7 @@ const routes = require("./routes");
 const errorHandler = require("./middlewares/errorHandler");
 const app = express();
 const PORT = process.env.PORT || 8000;
+const path = require("path");
 
 // ============================================
 // ✅ CORS CONFIGURATION (Multi-Origin)
@@ -92,7 +93,7 @@ const globalLimiter = rateLimit({
 // Stricter rate limiter for auth endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: isDevelopment ? 50 : 5, // More lenient in dev
+  max: isDevelopment ? 50 : 15, // More lenient in dev
   message: {
     success: false,
     message: "Terlalu banyak percobaan login. Silakan coba lagi nanti.",
@@ -147,12 +148,28 @@ app.use(globalLimiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(haltOnTimedout);
+  app.use((req, res, next) => {
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    next();
+  });
 
 // Request logging middleware
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.originalUrl}`);
   next();
 });
+
+ //image
+  app.use(
+    "/uploads",
+    express.static(path.join(__dirname, "../storage/uploads"))
+  );
+
+  app.use((req, res, next) => {
+    res.setHeader("ngrok-skip-browser-warning", "true");
+    next();
+  });
+
 
 // ============================================
 // ROUTES WITH GRANULAR RATE LIMITING
@@ -291,11 +308,14 @@ const startServer = async () => {
 
     await testConnection();
 
-    const syncOptions = {
-      alter: process.env.NODE_ENV !== "production",
-    };
+    // const syncOptions = {
+    //   alter: process.env.NODE_ENV !== "production",
+    // };
 
-    await sequelize.sync(syncOptions);
+    // await sequelize.sync(syncOptions);
+    await sequelize.sync();
+
+
 
     if (process.env.NODE_ENV === "production") {
       console.log("✅ Database synced (production mode - no schema changes)");

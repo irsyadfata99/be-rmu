@@ -244,7 +244,7 @@ const StockAdjustment = sequelize.define(
     adjustmentNumber: {
       type: DataTypes.STRING(50),
       allowNull: false,
-      unique: true,
+      // unique: true,
       comment: "Nomor adjustment (auto-generate)",
     },
     adjustmentType: {

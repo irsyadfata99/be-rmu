@@ -31,6 +31,10 @@ const { SalesReturn, SalesReturnItem } = require("./SalesReturn");
 // Import point model
 const PointTransaction = require("./PointTransaction");
 
+const Article = require("./Article");
+const CategoryPost = require("./CategoryPost");
+const TagPost = require("./TagPost");
+const ArticleTag = require("./ArticleTag");
 // ============================================
 // SETUP ALL ASSOCIATIONS
 // ============================================
@@ -415,6 +419,35 @@ PointTransaction.belongsTo(User, {
   as: "creator",
 });
 
+//POST MODULE
+// ================= CATEGORY =================
+CategoryPost.hasMany(Article, {
+  foreignKey: "category_id",
+});
+Article.belongsTo(CategoryPost, {
+  foreignKey: "category_id",
+});
+
+// ================= USER (AUTHOR) =================
+User.hasMany(Article, {
+  foreignKey: "author_id",
+});
+Article.belongsTo(User, {
+  foreignKey: "author_id",
+});
+
+Article.belongsToMany(TagPost, {
+  through: ArticleTag,
+  foreignKey: "article_id",
+  otherKey: "tag_post_id",
+});
+
+TagPost.belongsToMany(Article, {
+  through: ArticleTag,
+  foreignKey: "tag_post_id",
+  otherKey: "article_id",
+});
+
 // ============================================
 // EXPORT ALL MODELS
 // ============================================
@@ -450,4 +483,10 @@ module.exports = {
 
   // Points
   PointTransaction,
+
+  //post
+  Article,
+  CategoryPost,
+  TagPost,
+  ArticleTag,
 };

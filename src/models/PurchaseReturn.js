@@ -45,7 +45,7 @@ const PurchaseReturn = sequelize.define(
     returnNumber: {
       type: DataTypes.STRING(50),
       allowNull: false,
-      unique: true, // ✅ Index otomatis dari unique
+      // unique: true, // ✅ Index otomatis dari unique
       comment: "Nomor retur (auto-generate)",
     },
     returnDate: {
